@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.login
 
+import android.app.Activity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -10,9 +11,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.theme.BiliPink
 import kotlinx.coroutines.launch
@@ -34,6 +39,17 @@ fun LoginScreen(
     var selectedMethod by remember { mutableStateOf(LoginMethod.QR_CODE) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    
+    // 🔥 设置沉浸式状态栏和导航栏
+    LaunchedEffect(Unit) {
+        val window = (context as? Activity)?.window ?: return@LaunchedEffect
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.Transparent.toArgb()
+        window.navigationBarColor = Color.Transparent.toArgb()
+        WindowInsetsControllerCompat(window, view).isAppearanceLightStatusBars = false
+        WindowInsetsControllerCompat(window, view).isAppearanceLightNavigationBars = false
+    }
 
     // 第一次进入加载二维码
     LaunchedEffect(Unit) {
@@ -80,6 +96,7 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
             // 顶部栏 (Extracted)
             TopBar(onClose = onClose)

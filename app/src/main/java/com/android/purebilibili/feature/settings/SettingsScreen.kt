@@ -35,8 +35,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.vectorResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.ui.AppIcons
 
 const val GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
 
@@ -274,19 +276,19 @@ fun SettingsScreen(
                     )
                     Divider()
                     SettingClickableItem(
-                        icon = Icons.Filled.Send,
+                        icon = ImageVector.vectorResource(com.android.purebilibili.R.drawable.ic_telegram_logo),
                         title = "Telegram 频道",
                         value = "@BiliPai",
                         onClick = { uriHandler.openUri("https://t.me/BiliPai") },
-                        iconTint = Color(0xFF0088CC) // Telegram Blue
+                        iconTint = Color.Unspecified // Use original Telegram colors
                     )
                     Divider()
                     SettingClickableItem(
-                        icon = Icons.Filled.Star,
+                        icon = AppIcons.Twitter,
                         title = "Twitter / X",
                         value = "@YangY_0x00",
                         onClick = { uriHandler.openUri("https://x.com/YangY_0x00") },
-                        iconTint = Color(0xFF000000) // X Black
+                        iconTint = Color(0xFF1DA1F2) // Twitter Blue
                     )
                 }
             }
@@ -505,7 +507,7 @@ fun SettingsScreen(
                     SettingClickableItem(
                         icon = Icons.Outlined.Info,
                         title = "版本",
-                        value = "v1.0.2 Beta",
+                        value = "v${com.android.purebilibili.BuildConfig.VERSION_NAME}",
                         onClick = null,
                         iconTint = Color(0xFF29B6F6) // Light Blue
                     )
@@ -609,15 +611,25 @@ fun SettingClickableItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            // 🔥 彩色圆形背景图标
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(iconTint.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+            if (iconTint != Color.Unspecified) {
+                // 🔥 彩色圆形背景图标
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(iconTint.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+                }
+            } else {
+                // 🔥 使用图标原始颜色（无背景容器）
+                Box(
+                    modifier = Modifier.size(36.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(36.dp))
+                }
             }
             Spacer(modifier = Modifier.width(14.dp))
         }

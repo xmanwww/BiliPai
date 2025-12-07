@@ -8,12 +8,15 @@ import android.webkit.WebViewClient
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -455,31 +458,42 @@ fun WebLoginContent(
     onLoginSuccess: () -> Unit
 ) {
     val context = LocalContext.current
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    var webView: WebView? by remember { mutableStateOf(null) }
-
-    // 定期检查 Cookie
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(1500)
-            val cookies = CookieManager.getInstance().getCookie("https://www.bilibili.com")
-            if (!cookies.isNullOrEmpty() && cookies.contains("SESSDATA")) {
-                val sessData = cookies.split(";")
-                    .map { it.trim() }
-                    .find { it.startsWith("SESSDATA=") }
-                    ?.substringAfter("SESSDATA=")
-
-                if (!sessData.isNullOrEmpty()) {
-                    TokenManager.saveCookies(context, sessData)
-                    onLoginSuccess()
-                    break // 成功后退出循环
+    
+    var hasOpenedBrowser by remember { mutableStateOf(false) }
+    var checkingLogin by remember { mutableStateOf(false) }
+    var loginCheckFailed by remember { mutableStateOf(false) }
+    
+    // 检查登录状态
+    fun checkLoginStatus() {
+        scope.launch {
+            checkingLogin = true
+            loginCheckFailed = false
+            try {
+                val cookies = CookieManager.getInstance().getCookie("https://passport.bilibili.com")
+                    ?: CookieManager.getInstance().getCookie("https://www.bilibili.com")
+                android.util.Log.d("WebLogin", "🔥 检查 Cookie: $cookies")
+                
+                if (!cookies.isNullOrEmpty() && cookies.contains("SESSDATA")) {
+                    val sessData = cookies.split(";")
+                        .map { it.trim() }
+                        .find { it.startsWith("SESSDATA=") }
+                        ?.substringAfter("SESSDATA=")
+                    
+                    if (!sessData.isNullOrEmpty()) {
+                        android.util.Log.d("WebLogin", "✅ 检测到 SESSDATA")
+                        TokenManager.saveCookies(context, sessData)
+                        onLoginSuccess()
+                        return@launch
+                    }
                 }
+                loginCheckFailed = true
+            } finally {
+                checkingLogin = false
             }
         }
     }
-
+    
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -509,97 +523,109 @@ fun WebLoginContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // WebView 卡片
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // 主卡片
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(24.dp),
             color = Color.White,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Box {
-                if (errorMessage != null) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            Icons.Outlined.ErrorOutline,
-                            contentDescription = null,
-                            tint = Color.Red,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "加载失败: $errorMessage",
-                            color = Color.Black,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            errorMessage = null
-                            webView?.reload()
-                        }) {
-                            Text("重试")
-                        }
-                    }
-                }
-
-                AndroidView(
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                databaseEnabled = true
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                // 使用标准 Android Chrome UA
-                                userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36" 
-                            }
-
-                            CookieManager.getInstance().setAcceptCookie(true)
-                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                    super.onPageStarted(view, url, favicon)
-                                    isLoading = true
-                                    errorMessage = null
-                                }
-
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    super.onPageFinished(view, url)
-                                    isLoading = false
-                                    CookieManager.getInstance().flush()
-
-                                    // 🔥 使用提取到 LoginUtils.kt 的 JS 字符串
-                                    view?.evaluateJavascript(WEB_LOGIN_INJECT_JS, null)
-                                }
-
-                                override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
-                                    super.onReceivedError(view, errorCode, description, failingUrl)
-                                    // 过滤掉自定义协议的错误 (如 bilibili://)
-                                    if (failingUrl?.startsWith("http") == true) {
-                                        errorMessage = description
-                                    }
-                                }
-                            }
-                            
-                            loadUrl("https://passport.bilibili.com/h5-login")
-                            webView = this
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
+            Column(
+                modifier = Modifier.padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    Icons.Outlined.Language,
+                    contentDescription = null,
+                    tint = BiliPink,
+                    modifier = Modifier.size(64.dp)
                 )
                 
-                if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        LoadingAnimation(size = 60.dp)
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                Text(
+                    text = if (hasOpenedBrowser) "在浏览器中完成登录后" else "在浏览器中登录",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF333333)
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = if (hasOpenedBrowser) "返回此应用并点击验证按钮" else "点击下方按钮打开浏览器完成登录",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                if (!hasOpenedBrowser) {
+                    // 打开浏览器按钮
+                    Button(
+                        onClick = {
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://passport.bilibili.com/h5-app/passport/login")
+                            )
+                            context.startActivity(intent)
+                            hasOpenedBrowser = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BiliPink),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.Language, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("打开浏览器登录", color = Color.White)
+                    }
+                } else {
+                    // 验证登录状态按钮
+                    Button(
+                        onClick = { checkLoginStatus() },
+                        enabled = !checkingLogin,
+                        colors = ButtonDefaults.buttonColors(containerColor = BiliPink),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (checkingLogin) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("验证中...", color = Color.White)
+                        } else {
+                            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("验证登录状态", color = Color.White)
+                        }
+                    }
+                    
+                    if (loginCheckFailed) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "未检测到登录，请先在浏览器中完成登录",
+                            fontSize = 12.sp,
+                            color = Color.Red,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // 重新打开浏览器
+                    TextButton(onClick = {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://passport.bilibili.com/h5-app/passport/login")
+                        )
+                        context.startActivity(intent)
+                    }) {
+                        Text("重新打开浏览器", color = BiliPink)
                     }
                 }
             }

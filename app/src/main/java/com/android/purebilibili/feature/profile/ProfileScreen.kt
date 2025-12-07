@@ -1,6 +1,7 @@
 // 文件路径: feature/profile/ProfileScreen.kt
 package com.android.purebilibili.feature.profile
 
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,12 +25,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -38,7 +43,6 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.BiliGradientButton
-import androidx.compose.material.icons.outlined.Login
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,45 +56,62 @@ fun ProfileScreen(
     onFavoriteClick: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val view = LocalView.current
+
+    // 🔥 设置沉浸式状态栏和导航栏
+    LaunchedEffect(state) {
+        val window = (context as? Activity)?.window ?: return@LaunchedEffect
+        val isLoggedOut = state is ProfileUiState.LoggedOut
+        if (isLoggedOut) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
+            WindowInsetsControllerCompat(window, view).isAppearanceLightStatusBars = false
+            WindowInsetsControllerCompat(window, view).isAppearanceLightNavigationBars = false
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadProfile()
     }
 
-    Scaffold(
-        // 🔥 修复：背景色
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        //  修复：图标颜色
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                },
-                // 🔥 修复：TopBar 背景
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+    // 🔥 未登录状态使用沉浸式全屏布局，已登录使用正常 Scaffold
+    when (val s = state) {
+        is ProfileUiState.Loading -> {
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+                LoadingAnimation(size = 80.dp)
+            }
+        }
+        is ProfileUiState.LoggedOut -> {
+            // 🔥 沉浸式全屏布局
+            GuestProfileContent(
+                onGoToLogin = onGoToLogin,
+                onBack = onBack,
+                onSettingsClick = onSettingsClick
             )
         }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            when (val s = state) {
-                is ProfileUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        // 🔥 使用 Lottie 加载动画
-                        LoadingAnimation(size = 80.dp)
-                    }
+        is ProfileUiState.Success -> {
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                topBar = {
+                    TopAppBar(
+                        title = { },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = onSettingsClick) {
+                                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                    )
                 }
-                is ProfileUiState.LoggedOut -> {
-                    GuestProfileContent(onGoToLogin = onGoToLogin)
-                }
-                is ProfileUiState.Success -> {
+            ) { padding ->
+                Box(modifier = Modifier.padding(padding).fillMaxSize()) {
                     UserProfileContent(
                         user = s.user,
                         onLogout = {
@@ -107,7 +128,11 @@ fun ProfileScreen(
 }
 
 @Composable
-fun GuestProfileContent(onGoToLogin: () -> Unit) {
+fun GuestProfileContent(
+    onGoToLogin: () -> Unit,
+    onBack: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -121,10 +146,28 @@ fun GuestProfileContent(onGoToLogin: () -> Unit) {
                 )
             )
     ) {
+        // 🔥 沉浸式顶部栏
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+            }
+            IconButton(onClick = onSettingsClick) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+            }
+        }
+        
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 32.dp),
+                .padding(horizontal = 32.dp)
+                .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -148,14 +191,14 @@ fun GuestProfileContent(onGoToLogin: () -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "欢迎来到 BiliPai",
+                text = "欢迎使用 BiliPai",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
 
             Text(
-                text = "登录后解锁完整功能",
+                text = "登录后享受完整的 B站 体验",
                 fontSize = 14.sp,
                 color = Color.White.copy(alpha = 0.6f),
                 modifier = Modifier.padding(top = 8.dp)

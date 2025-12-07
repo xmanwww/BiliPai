@@ -54,8 +54,10 @@ fun VideoDetailScreen(
     bvid: String,
     coverUrl: String,
     onBack: () -> Unit,
+    miniPlayerManager: MiniPlayerManager? = null,
     isInPipMode: Boolean = false,
     isVisible: Boolean = true,
+    startInFullscreen: Boolean = false,  // 🔥 从小窗展开时自动进入全屏
     viewModel: PlayerViewModel = viewModel(),
     commentViewModel: VideoCommentViewModel = viewModel() // 🔥
 ) {
@@ -72,6 +74,15 @@ fun VideoDetailScreen(
 
     var isPipMode by remember { mutableStateOf(isInPipMode) }
     LaunchedEffect(isInPipMode) { isPipMode = isInPipMode }
+    
+    // 🔥 从小窗展开时自动进入横屏全屏
+    LaunchedEffect(startInFullscreen) {
+        if (startInFullscreen && !isLandscape) {
+            context.findActivity()?.let { activity ->
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+        }
+    }
 
     // 退出重置亮度
     DisposableEffect(Unit) {
@@ -94,6 +105,7 @@ fun VideoDetailScreen(
     LaunchedEffect(uiState) {
         if (uiState is PlayerUiState.Success) {
             val info = (uiState as PlayerUiState.Success).info
+            val success = uiState as PlayerUiState.Success
             
             // 初始化评论
             commentViewModel.init(info.aid)
@@ -103,6 +115,22 @@ fun VideoDetailScreen(
                 artist = info.owner.name,
                 coverUrl = info.pic
             )
+            
+            // 🔥 同步视频信息到小窗管理器（为小窗模式做准备）
+            android.util.Log.d("VideoDetailScreen", "🔥 miniPlayerManager=${if (miniPlayerManager != null) "存在" else "null"}, bvid=$bvid")
+            if (miniPlayerManager != null) {
+                android.util.Log.d("VideoDetailScreen", "🔥 调用 setVideoInfo: title=${info.title}")
+                miniPlayerManager.setVideoInfo(
+                    bvid = bvid,
+                    title = info.title,
+                    cover = info.pic,
+                    owner = info.owner.name,
+                    externalPlayer = playerState.player
+                )
+                android.util.Log.d("VideoDetailScreen", "✅ setVideoInfo 调用完成")
+            } else {
+                android.util.Log.w("VideoDetailScreen", "⚠️ miniPlayerManager 是 null!")
+            }
         } else if (uiState is PlayerUiState.Loading) {
             playerState.updateMediaMetadata(
                 title = "加载中...",

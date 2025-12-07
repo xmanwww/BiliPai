@@ -31,9 +31,13 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.theme.PureBiliBiliTheme
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.video.FullscreenPlayerOverlay
 import com.android.purebilibili.navigation.AppNavigation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+
+import com.android.purebilibili.feature.video.MiniPlayerManager
+import com.android.purebilibili.feature.video.MiniPlayerOverlay
 
 private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
@@ -48,12 +52,19 @@ class MainActivity : ComponentActivity() {
     // 🔥 是否在视频页面 (用于决定是否进入 PiP)
     var isInVideoDetail by mutableStateOf(false)
     
+    // 🔥 小窗管理器
+    private lateinit var miniPlayerManager: MiniPlayerManager
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // 初始化小窗管理器
+        miniPlayerManager = MiniPlayerManager.getInstance(this)
 
         setContent {
             val context = LocalContext.current
+            val navController = androidx.navigation.compose.rememberNavController()
             
             // 🔥 首次启动检测
             val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
@@ -80,28 +91,65 @@ class MainActivity : ComponentActivity() {
                 darkTheme = useDarkTheme,
                 dynamicColor = dynamicColor // 🔥🔥 传入动态取色开关
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    AppNavigation(
-                        isInPipMode = isInPipMode,
-                        onVideoDetailEnter = { 
-                            isInVideoDetail = true
-                            Log.d(TAG, "🎬 进入视频详情页")
-                        },
-                        onVideoDetailExit = { 
-                            isInVideoDetail = false
-                            Log.d(TAG, "🔙 退出视频详情页")
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        AppNavigation(
+                            navController = navController,
+                            miniPlayerManager = miniPlayerManager,
+                            isInPipMode = isInPipMode,
+                            onVideoDetailEnter = { 
+                                isInVideoDetail = true
+                                Log.d(TAG, "🎬 进入视频详情页")
+                            },
+                            onVideoDetailExit = { 
+                                isInVideoDetail = false
+                                Log.d(TAG, "🔙 退出视频详情页")
+                            }
+                        )
+                        
+                        // 🔥 首次启动欢迎弹窗
+                        if (showWelcome) {
+                            WelcomeDialog(
+                                onDismiss = {
+                                    prefs.edit().putBoolean(KEY_FIRST_LAUNCH, true).apply()
+                                    showWelcome = false
+                                }
+                            )
+                        }
+                    }
+                    
+                    // 🔥 小窗全屏状态
+                    var showFullscreen by remember { mutableStateOf(false) }
+                    
+                    // 🔥 小窗播放器覆盖层
+                    MiniPlayerOverlay(
+                        miniPlayerManager = miniPlayerManager,
+                        onExpandClick = {
+                            // 🔥 直接显示全屏播放器（无需导航）
+                            showFullscreen = true
+                            miniPlayerManager.exitMiniMode()
                         }
                     )
                     
-                    // 🔥 首次启动欢迎弹窗
-                    if (showWelcome) {
-                        WelcomeDialog(
-                            onDismiss = {
-                                prefs.edit().putBoolean(KEY_FIRST_LAUNCH, true).apply()
-                                showWelcome = false
+                    // 🔥 全屏播放器覆盖层（包含亮度、音量、进度调节）
+                    if (showFullscreen) {
+                        FullscreenPlayerOverlay(
+                            miniPlayerManager = miniPlayerManager,
+                            onDismiss = { 
+                                showFullscreen = false
+                                miniPlayerManager.enterMiniMode()
+                            },
+                            onNavigateToDetail = {
+                                // 🔥 返回时导航到视频详情页
+                                showFullscreen = false
+                                miniPlayerManager.currentBvid?.let { bvid ->
+                                    navController.navigate("video/$bvid?cid=0&cover=") {
+                                        launchSingleTop = true
+                                    }
+                                }
                             }
                         )
                     }

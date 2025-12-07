@@ -253,28 +253,43 @@ fun rememberVideoPlayerState(
     bvid: String
 ): VideoPlayerState {
 
-    val player = remember(context) {
-        val headers = mapOf(
-            "Referer" to "https://www.bilibili.com",
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        )
-        val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.okHttpClient)
-            .setDefaultRequestProperties(headers)
-
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .build()
-
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-            .apply {
-                prepare()
-                playWhenReady = true
+    // 🔥 尝试复用 MiniPlayerManager 中已加载的 player
+    val miniPlayerManager = MiniPlayerManager.getInstance(context)
+    val reuseFromMiniPlayer = miniPlayerManager.isActive && miniPlayerManager.currentBvid == bvid
+    
+    val player = remember(context, bvid, reuseFromMiniPlayer) {
+        // 如果小窗有这个视频的 player，直接复用
+        if (reuseFromMiniPlayer) {
+            miniPlayerManager.player?.also {
+                android.util.Log.d("VideoPlayerState", "🔥 复用小窗 player: bvid=$bvid")
             }
+        } else {
+            null
+        } ?: run {
+            // 创建新的 player
+            android.util.Log.d("VideoPlayerState", "🔥 创建新 player: bvid=$bvid")
+            val headers = mapOf(
+                "Referer" to "https://www.bilibili.com",
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            )
+            val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.okHttpClient)
+                .setDefaultRequestProperties(headers)
+
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build()
+
+            ExoPlayer.Builder(context)
+                .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+                .setAudioAttributes(audioAttributes, true)
+                .setHandleAudioBecomingNoisy(true)
+                .build()
+                .apply {
+                    prepare()
+                    playWhenReady = true
+                }
+        }
     }
 
     val sessionActivityPendingIntent = remember(context, bvid) {
@@ -288,8 +303,12 @@ fun rememberVideoPlayerState(
         )
     }
 
-    val mediaSession = remember(player, sessionActivityPendingIntent) {
+    // 🔥 为 MediaSession 生成唯一 ID，避免从小窗展开时冲突
+    val sessionId = remember(bvid) { "bilipai_${bvid}_${System.currentTimeMillis()}" }
+    
+    val mediaSession = remember(player, sessionActivityPendingIntent, sessionId) {
         MediaSession.Builder(context, player)
+            .setId(sessionId)  // 🔥 使用唯一 ID
             .setSessionActivity(sessionActivityPendingIntent)
             .build()
     }
@@ -324,9 +343,20 @@ fun rememberVideoPlayerState(
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.cancel(NOTIFICATION_ID)
 
-            mediaSession.release()
-            player.release()
-            danmakuView.release()
+            // 🔥 检查是否有小窗在使用这个 player
+            val miniPlayerManager = MiniPlayerManager.getInstance(context)
+            if (miniPlayerManager.isMiniMode && miniPlayerManager.isActive) {
+                // 小窗模式下不释放 player，只释放其他资源
+                android.util.Log.d("VideoPlayerState", "🔥 小窗模式激活，不释放 player")
+                danmakuView.release()
+            } else {
+                // 正常释放所有资源
+                android.util.Log.d("VideoPlayerState", "🔥 释放所有资源")
+                mediaSession.release()
+                player.release()
+                danmakuView.release()
+            }
+            
             (context as? ComponentActivity)?.window?.attributes?.screenBrightness =
                 WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }

@@ -25,6 +25,7 @@ import com.android.purebilibili.feature.list.CommonListScreen
 import com.android.purebilibili.feature.list.HistoryViewModel
 import com.android.purebilibili.feature.list.FavoriteViewModel
 import com.android.purebilibili.feature.video.VideoDetailScreen
+import com.android.purebilibili.feature.video.MiniPlayerManager
 import com.android.purebilibili.feature.dynamic.DynamicScreen
 
 // 定义路由参数结构
@@ -42,6 +43,8 @@ object VideoRoute {
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
+    // 🔥 小窗管理器
+    miniPlayerManager: MiniPlayerManager? = null,
     // 🔥 PiP 支持参数
     isInPipMode: Boolean = false,
     onVideoDetailEnter: () -> Unit = {},
@@ -51,6 +54,8 @@ fun AppNavigation(
 
     // 统一跳转逻辑
     fun navigateToVideo(bvid: String, cid: Long = 0L, coverUrl: String = "") {
+        // 🔥 如果有小窗在播放，先退出小窗模式
+        miniPlayerManager?.exitMiniMode()
         navController.navigate(VideoRoute.createRoute(bvid, cid, coverUrl))
     }
 
@@ -84,13 +89,15 @@ fun AppNavigation(
             arguments = listOf(
                 navArgument("bvid") { type = NavType.StringType },
                 navArgument("cid") { type = NavType.LongType; defaultValue = 0L },
-                navArgument("cover") { type = NavType.StringType; defaultValue = "" }
+                navArgument("cover") { type = NavType.StringType; defaultValue = "" },
+                navArgument("fullscreen") { type = NavType.BoolType; defaultValue = false }
             ),
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
         ) { backStackEntry ->
             val bvid = backStackEntry.arguments?.getString("bvid") ?: ""
             val coverUrl = backStackEntry.arguments?.getString("cover") ?: ""
+            val startFullscreen = backStackEntry.arguments?.getBoolean("fullscreen") ?: false
 
             // 🔥 进入视频详情页时通知 MainActivity
             DisposableEffect(Unit) {
@@ -103,9 +110,15 @@ fun AppNavigation(
             VideoDetailScreen(
                 bvid = bvid,
                 coverUrl = coverUrl,
+                miniPlayerManager = miniPlayerManager,
                 isInPipMode = isInPipMode,
                 isVisible = true,
-                onBack = { navController.popBackStack() }
+                startInFullscreen = startFullscreen,  // 🔥 传递全屏参数
+                onBack = { 
+                    // 🔥 返回时进入小窗模式（而非直接停止播放）
+                    miniPlayerManager?.enterMiniMode()
+                    navController.popBackStack() 
+                }
             )
         }
 
