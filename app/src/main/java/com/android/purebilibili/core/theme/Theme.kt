@@ -13,19 +13,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 // --- 扩展颜色定义 ---
-private val DarkSurfaceVariant = Color(0xFF2A2A2A)
 private val LightSurfaceVariant = Color(0xFFF1F2F3)
 
-// 🔥🔥 [新增] 根据主题色索引生成配色方案
+// 🔥🔥 [优化] 根据主题色索引生成配色方案
 private fun createDarkColorScheme(primaryColor: Color) = darkColorScheme(
     primary = primaryColor,
     onPrimary = White,
-    secondary = primaryColor.copy(alpha = 0.8f),
+    secondary = primaryColor.copy(alpha = 0.85f),
     background = DarkBackground,
     surface = DarkSurface,
     onSurface = TextPrimaryDark,
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = TextSecondaryDark
+    onSurfaceVariant = TextSecondaryDark,
+    surfaceContainer = DarkSurfaceElevated,
+    outline = Color(0xFF3D3D3D),
+    outlineVariant = Color(0xFF2A2A2A)
 )
 
 private fun createLightColorScheme(primaryColor: Color) = lightColorScheme(

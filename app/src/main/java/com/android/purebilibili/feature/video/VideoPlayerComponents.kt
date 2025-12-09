@@ -31,79 +31,91 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.bouncyClickable
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.android.purebilibili.core.theme.ActionLikeDark
+import com.android.purebilibili.core.theme.ActionCoinDark
+import com.android.purebilibili.core.theme.ActionFavoriteDark
+import com.android.purebilibili.core.theme.ActionShareDark
+import com.android.purebilibili.core.theme.ActionCommentDark
 
 // 🔥 1. 视频头部信息（优化布局和样式）
 @Composable
-fun VideoHeaderSection(info: ViewInfo) {
+fun VideoHeaderSection(
+    info: ViewInfo,
+    isFollowing: Boolean = false,
+    onFollowClick: () -> Unit = {}
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // UP主信息行
+        // UP主信息行 - 简洁布局（去除多余背景）
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 头像
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(info.owner.face))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // UP主名称
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = info.owner.name,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground
+                // 头像
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(FormatUtils.fixImageUrl(info.owner.face))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "UP主",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    fontSize = 11.sp
-                )
-            }
 
-            // 关注按钮（优化设计）
-            Surface(
-                onClick = { },
-                color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.height(36.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // UP主名称
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "关注",
-                        fontSize = 14.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium
+                        text = info.owner.name,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "UP主",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                }
+
+                // 🔥 关注按钮（支持状态切换）
+                Surface(
+                    onClick = onFollowClick,
+                    color = if (isFollowing) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        if (!isFollowing) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = if (isFollowing) "已关注" else "关注",
+                            fontSize = 14.sp,
+                            color = if (isFollowing) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
                 }
             }
         }
@@ -213,47 +225,62 @@ fun VideoHeaderSection(info: ViewInfo) {
 
 // 🔥 2. 操作按钮行（优化布局和视觉效果）
 @Composable
-fun ActionButtonsRow(info: ViewInfo, onCommentClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.background
+fun ActionButtonsRow(
+    info: ViewInfo,
+    isFavorited: Boolean = false,
+    isLiked: Boolean = false,
+    coinCount: Int = 0,
+    onFavoriteClick: () -> Unit = {},
+    onLikeClick: () -> Unit = {},
+    onCoinClick: () -> Unit = {},
+    onTripleClick: () -> Unit = {},
+    onCommentClick: () -> Unit
+) {
+    val isDark = isSystemInDarkTheme()
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            // 🔥 点赞 - 粉色
+            // 🔥 点赞 - 粉色（支持状态切换）
             ActionButton(
-                icon = Icons.Outlined.ThumbUp,
+                icon = if (isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
                 text = FormatUtils.formatStat(info.stat.like.toLong()),
-                iconColor = BiliPink,
-                iconSize = 26.dp
+                iconColor = if (isDark) ActionLikeDark else BiliPink,
+                iconSize = 26.dp,
+                isActive = isLiked,
+                onClick = onLikeClick
             )
 
-            // 🔥 投币 - 金色
+            // 🔥 投币 - 金色（支持状态切换）
             ActionButton(
-                icon = Icons.Default.MonetizationOn,
-                text = if (info.stat.coin > 0) FormatUtils.formatStat(info.stat.coin.toLong()) else "投币",
-                iconColor = Color(0xFFFFB300), // 金色
-                iconSize = 26.dp
+                icon = if (coinCount > 0) Icons.Filled.MonetizationOn else Icons.Outlined.MonetizationOn,
+                text = if (coinCount > 0) "$coinCount 币" else "投币",
+                iconColor = if (isDark) ActionCoinDark else Color(0xFFFFB300),
+                iconSize = 26.dp,
+                isActive = coinCount > 0,
+                onClick = onCoinClick
             )
 
-            // 🔥 收藏 - 黄色
+            // 🔥 收藏 - 黄色（支持状态切换）
             ActionButton(
-                icon = Icons.Outlined.Star,
+                icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.Star,
                 text = if (info.stat.favorite > 0) FormatUtils.formatStat(info.stat.favorite.toLong()) else "收藏",
-                iconColor = Color(0xFFFFC107), // 琥珀黄
-                iconSize = 26.dp
+                iconColor = if (isDark) ActionFavoriteDark else Color(0xFFFFC107),
+                iconSize = 26.dp,
+                isActive = isFavorited,
+                onClick = onFavoriteClick
             )
 
-            // 🔥 分享 - 蓝色
+            // 🔥 三连 - 渐变色
             ActionButton(
-                icon = Icons.Outlined.Share,
-                text = if (info.stat.share > 0) FormatUtils.formatStat(info.stat.share.toLong()) else "分享",
-                iconColor = Color(0xFF2196F3), // 蓝色
-                iconSize = 26.dp
+                icon = Icons.Filled.Favorite,
+                text = "三连",
+                iconColor = if (isDark) Color(0xFFFF6B9D) else Color(0xFFE91E63),
+                iconSize = 26.dp,
+                onClick = onTripleClick
             )
 
             // 🔥 评论 - 青色
@@ -261,11 +288,10 @@ fun ActionButtonsRow(info: ViewInfo, onCommentClick: () -> Unit) {
             ActionButton(
                 icon = Icons.Outlined.Comment,
                 text = if (replyCount > 0) FormatUtils.formatStat(replyCount.toLong()) else "评论",
-                iconColor = Color(0xFF00BCD4), // 青色
+                iconColor = if (isDark) ActionCommentDark else Color(0xFF00BCD4),
                 onClick = onCommentClick,
                 iconSize = 26.dp
             )
-        }
     }
 }
 
@@ -279,6 +305,8 @@ fun ActionButton(
     iconSize: androidx.compose.ui.unit.Dp = 24.dp,
     onClick: () -> Unit = {}
 ) {
+    val isDark = isSystemInDarkTheme()
+    
     // 🔥 按压动画状态
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -306,18 +334,18 @@ fun ActionButton(
                 indication = null
             ) { onClick() }
     ) {
-        // 🔥 图标容器 - 使用彩色背景
+        // 🔥 图标容器 - 使用彩色背景，深色模式下提高透明度
         Box(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(iconColor.copy(alpha = 0.1f)), // 🔥 使用传入颜色的淡色背景
+                .background(iconColor.copy(alpha = if (isDark) 0.15f else 0.1f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = iconColor, // 🔥 直接使用传入的颜色
+                tint = iconColor,
                 modifier = Modifier.size(iconSize)
             )
         }
@@ -325,7 +353,7 @@ fun ActionButton(
         Text(
             text = text,
             fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Normal,
             maxLines = 1
         )
@@ -413,17 +441,38 @@ fun RelatedVideosHeader() {
     }
 }
 
-// 🔥 5. 推荐视频单项（优化布局）
+// 🔥 5. 推荐视频单项（iOS 风格优化）
 @Composable
 fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
+    // 🔥 iOS 风格按压动画
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "cardScale"
+    )
+    
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
         color = MaterialTheme.colorScheme.background
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null
+                ) { onClick() }
                 .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             // 视频封面
@@ -431,7 +480,7 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                 modifier = Modifier
                     .width(150.dp)
                     .height(94.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
@@ -546,4 +595,86 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
             }
         }
     }
+}
+
+// 🔥🔥 [新增] 投币对话框
+@Composable
+fun CoinDialog(
+    visible: Boolean,
+    currentCoinCount: Int,  // 已投币数量 0/1/2
+    onDismiss: () -> Unit,
+    onConfirm: (count: Int, alsoLike: Boolean) -> Unit
+) {
+    if (!visible) return
+    
+    var selectedCount by remember { mutableStateOf(1) }
+    var alsoLike by remember { mutableStateOf(true) }
+    
+    val maxCoins = 2 - currentCoinCount  // 剩余可投数量
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("投币", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text(
+                    "选择投币数量",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 投币选项
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // 投 1 币
+                    FilterChip(
+                        selected = selectedCount == 1,
+                        onClick = { selectedCount = 1 },
+                        label = { Text("1 硬币") },
+                        enabled = maxCoins >= 1
+                    )
+                    // 投 2 币
+                    FilterChip(
+                        selected = selectedCount == 2,
+                        onClick = { selectedCount = 2 },
+                        label = { Text("2 硬币") },
+                        enabled = maxCoins >= 2
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 同时点赞
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { alsoLike = !alsoLike },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = alsoLike,
+                        onCheckedChange = { alsoLike = it }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("同时点赞")
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(selectedCount.coerceAtMost(maxCoins), alsoLike) },
+                enabled = maxCoins > 0
+            ) {
+                Text("投币")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }

@@ -217,40 +217,45 @@ fun VideoPlayerSection(
                 }
             }
     ) {
-        // 1. PlayerView
+        // 🔥🔥 关键修复：使用单个 FrameLayout 包含 PlayerView 和 DanmakuView
+        // 绕过 Compose 的 AndroidView 对 DanmakuView 的兼容性问题
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = playerState.player
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    useController = false
+                android.widget.FrameLayout(ctx).apply {
+                    // 1. 添加 PlayerView
+                    val playerView = PlayerView(ctx).apply {
+                        player = playerState.player
+                        setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+                        useController = false
+                    }
+                    addView(playerView, android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                    ))
+                    
+                    // 2. 添加 DanmakuView（如果不在 PiP 模式）
+                    if (!isInPipMode) {
+                        val dv = playerState.danmakuView
+                        (dv.parent as? ViewGroup)?.removeView(dv)
+                        dv.visibility = android.view.View.VISIBLE
+                        dv.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        addView(dv, android.widget.FrameLayout.LayoutParams(
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                        ))
+                        android.util.Log.d("DanmakuView", "🔥 Added DanmakuView to FrameLayout: ${dv.hashCode()}")
+                    }
+                }
+            },
+            update = { frameLayout ->
+                // 确保 DanmakuView 在最上层
+                val dv = playerState.danmakuView
+                if (dv.parent == frameLayout && !isInPipMode) {
+                    dv.bringToFront()
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
-        
-        // 2. DanmakuView - 使用 key 确保不重复创建
-        if (!isInPipMode) {
-            key(playerState.danmakuView) {
-                AndroidView(
-                    factory = { _ ->
-                        val dv = playerState.danmakuView
-                        // 🔥 确保从旧 parent 移除
-                        (dv.parent as? ViewGroup)?.removeView(dv)
-                        dv.apply {
-                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            visibility = android.view.View.VISIBLE
-                        }
-                    },
-                    update = { view ->
-                        view.visibility = android.view.View.VISIBLE
-                        // 🔥 确保在最顶层
-                        view.bringToFront()
-                    },
-                    modifier = Modifier.fillMaxSize().zIndex(10f)  // 🔥 确保弹幕在最顶层
-                )
-            }
-        }
 
         if (isGestureVisible && !isInPipMode) {
             Box(

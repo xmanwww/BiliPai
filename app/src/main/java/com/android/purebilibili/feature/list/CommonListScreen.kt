@@ -37,7 +37,7 @@ fun CommonListScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { padding ->
@@ -45,7 +45,7 @@ fun CommonListScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(Color(0xFFF1F2F3))
+                .background(MaterialTheme.colorScheme.background)
         ) {
             if (state.isLoading) {
                 LazyVerticalGrid(

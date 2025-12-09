@@ -87,10 +87,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val isVip = navData.vip.status == 1
                 // 🔥 缓存 VIP 状态供 PlayerViewModel 使用
                 com.android.purebilibili.core.store.TokenManager.isVipCache = isVip
+                // 🔥 缓存用户 MID 供收藏等功能使用
+                com.android.purebilibili.core.store.TokenManager.midCache = navData.mid
                 newUserState = UserState(
                     isLogin = true,
                     face = navData.face,
                     name = navData.uname,
+                    mid = navData.mid,
                     level = navData.level_info.current_level,
                     coin = navData.money,
                     bcoin = navData.wallet.bcoin_balance,
@@ -99,6 +102,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 // 🔥🔥 接口明确返回未登录，强制重置为 Guest
                 com.android.purebilibili.core.store.TokenManager.isVipCache = false
+                com.android.purebilibili.core.store.TokenManager.midCache = null
                 newUserState = UserState(isLogin = false)
             }
         }.onFailure {

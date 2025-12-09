@@ -93,6 +93,17 @@ fun VideoDetailScreen(
             window?.attributes = layoutParams
         }
     }
+    
+    // 🔥🔥 新增：监听消息事件（关注/收藏反馈）- 使用居中弹窗
+    var popupMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { message ->
+            popupMessage = message
+            // 2秒后自动隐藏
+            kotlinx.coroutines.delay(2000)
+            popupMessage = null
+        }
+    }
 
     // 初始化播放器状态
     val playerState = rememberVideoPlayerState(
@@ -225,9 +236,8 @@ fun VideoDetailScreen(
 
                     when (uiState) {
                         is PlayerUiState.Loading -> {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            }
+                            // 🔥 播放器加载圈 + 下方骨架屏
+                            VideoDetailSkeleton()
                         }
 
                         is PlayerUiState.Success -> {
@@ -239,6 +249,15 @@ fun VideoDetailScreen(
                                 replyCount = commentState.replyCount, // 🔥
                                 emoteMap = success.emoteMap,
                                 isRepliesLoading = commentState.isRepliesLoading, // 🔥
+                                isFollowing = success.isFollowing,
+                                isFavorited = success.isFavorited,
+                                isLiked = success.isLiked,
+                                coinCount = success.coinCount,
+                                onFollowClick = { viewModel.toggleFollow() },
+                                onFavoriteClick = { viewModel.toggleFavorite() },
+                                onLikeClick = { viewModel.toggleLike() },
+                                onCoinClick = { viewModel.openCoinDialog() },
+                                onTripleClick = { viewModel.doTripleAction() },
                                 onRelatedVideoClick = { vid -> viewModel.loadVideo(vid) },
                                 onSubReplyClick = { commentViewModel.openSubReply(it) }, // 🔥
                                 onLoadMoreReplies = { commentViewModel.loadComments() } // 🔥
@@ -262,6 +281,16 @@ fun VideoDetailScreen(
             }
         }
         
+        // 🔥🔥 [新增] 投币对话框
+        val coinDialogVisible by viewModel.coinDialogVisible.collectAsState()
+        val currentCoinCount = (uiState as? PlayerUiState.Success)?.coinCount ?: 0
+        CoinDialog(
+            visible = coinDialogVisible,
+            currentCoinCount = currentCoinCount,
+            onDismiss = { viewModel.closeCoinDialog() },
+            onConfirm = { count, alsoLike -> viewModel.doCoin(count, alsoLike) }
+        )
+        
         // 🔥 评论二级弹窗
         if (subReplyState.visible) {
             BackHandler {
@@ -274,6 +303,56 @@ fun VideoDetailScreen(
                 onDismiss = { commentViewModel.closeSubReply() },
                 onLoadMore = { commentViewModel.loadMoreSubReplies() }
             )
+        }
+        
+        // 🎉 点赞成功爆裂动画
+        val likeBurstVisible by viewModel.likeBurstVisible.collectAsState()
+        if (likeBurstVisible) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(y = (-50).dp)
+            ) {
+                LikeBurstAnimation(
+                    visible = true,
+                    onAnimationEnd = { viewModel.dismissLikeBurst() }
+                )
+            }
+        }
+        
+        // 🎉 三连成功庆祝动画
+        val tripleCelebrationVisible by viewModel.tripleCelebrationVisible.collectAsState()
+        if (tripleCelebrationVisible) {
+            Box(
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                TripleSuccessAnimation(
+                    visible = true,
+                    onAnimationEnd = { viewModel.dismissTripleCelebration() }
+                )
+            }
+        }
+        
+        // 🔥🔥 居中弹窗提示（关注/收藏反馈）
+        androidx.compose.animation.AnimatedVisibility(
+            visible = popupMessage != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.8f),
+            exit = fadeOut() + scaleOut(targetScale = 0.8f),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.85f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                tonalElevation = 8.dp
+            ) {
+                Text(
+                    text = popupMessage ?: "",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
+                )
+            }
         }
     }
 }
@@ -296,6 +375,15 @@ fun VideoContentSection(
     replyCount: Int,
     emoteMap: Map<String, String>,
     isRepliesLoading: Boolean,
+    isFollowing: Boolean = false,
+    isFavorited: Boolean = false,
+    isLiked: Boolean = false,
+    coinCount: Int = 0,
+    onFollowClick: () -> Unit = {},
+    onFavoriteClick: () -> Unit = {},
+    onLikeClick: () -> Unit = {},
+    onCoinClick: () -> Unit = {},
+    onTripleClick: () -> Unit = {},
     onRelatedVideoClick: (String) -> Unit,
     onSubReplyClick: (ReplyItem) -> Unit,
     onLoadMoreReplies: () -> Unit
@@ -310,11 +398,24 @@ fun VideoContentSection(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
-        item { VideoHeaderSection(info = info) }
+        item { 
+            VideoHeaderSection(
+                info = info,
+                isFollowing = isFollowing,
+                onFollowClick = onFollowClick
+            ) 
+        }
 
         item {
             ActionButtonsRow(
                 info = info,
+                isFavorited = isFavorited,
+                isLiked = isLiked,
+                coinCount = coinCount,
+                onFavoriteClick = onFavoriteClick,
+                onLikeClick = onLikeClick,
+                onCoinClick = onCoinClick,
+                onTripleClick = onTripleClick,
                 onCommentClick = {
                     coroutineScope.launch {
                         listState.animateScrollToItem(commentHeaderIndex)

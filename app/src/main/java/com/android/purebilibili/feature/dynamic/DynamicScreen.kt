@@ -444,7 +444,7 @@ fun DrawGrid(items: List<DrawItem>) {
                             .weight(1f)
                             .aspectRatio(aspectRatio.coerceIn(0.5f, 2f))
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFF0F0F0)),
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         if (imageUrl.isNotEmpty()) {

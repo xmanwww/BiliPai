@@ -24,6 +24,8 @@ object TokenManager {
     private const val SP_NAME = "token_backup_sp"
     private const val SP_KEY_SESS = "sessdata_backup"
     private const val SP_KEY_BUVID = "buvid3_backup"
+    private const val SP_KEY_CSRF = "bili_jct_backup"  // 🔥 新增 CSRF 持久化
+    private const val SP_KEY_MID = "mid_backup"        // 🔥 新增 MID 持久化
 
     @Volatile
     var sessDataCache: String? = null
@@ -36,12 +38,24 @@ object TokenManager {
     // 🔥 [新增] VIP 状态缓存 (1=有效大会员, 0=非VIP)
     @Volatile
     var isVipCache: Boolean = false
+    
+    // 🔥 [新增] CSRF Token 缓存 (bili_jct)
+    @Volatile
+    var csrfCache: String? = null
+    
+    // 🔥 [新增] 用户 MID 缓存
+    @Volatile
+    var midCache: Long? = null
 
     fun init(context: Context) {
         // 1. 🔥 同步读取 SP 备份，确保主线程立即有数据
         val sp = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
         sessDataCache = sp.getString(SP_KEY_SESS, null)
         buvid3Cache = sp.getString(SP_KEY_BUVID, null)
+        csrfCache = sp.getString(SP_KEY_CSRF, null)  // 🔥 读取 CSRF
+        midCache = sp.getLong(SP_KEY_MID, 0L).takeIf { it > 0 }  // 🔥 读取 MID
+        
+        android.util.Log.d("TokenManager", "🔥 init: sessData=${sessDataCache?.take(10)}..., csrf=${csrfCache?.take(10)}..., mid=$midCache")
 
         // 2. 启动 DataStore 监听 (主要数据源)
         CoroutineScope(Dispatchers.IO).launch {
@@ -68,6 +82,22 @@ object TokenManager {
                 }
             }
         }
+    }
+    
+    // 🔥 [新增] 保存 CSRF Token
+    fun saveCsrf(context: Context, csrf: String) {
+        csrfCache = csrf
+        context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+            .edit().putString(SP_KEY_CSRF, csrf).apply()
+        android.util.Log.d("TokenManager", "🔥 saveCsrf: ${csrf.take(10)}...")
+    }
+    
+    // 🔥 [新增] 保存用户 MID
+    fun saveMid(context: Context, mid: Long) {
+        midCache = mid
+        context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+            .edit().putLong(SP_KEY_MID, mid).apply()
+        android.util.Log.d("TokenManager", "🔥 saveMid: $mid")
     }
 
     suspend fun saveCookies(context: Context, sessData: String) {

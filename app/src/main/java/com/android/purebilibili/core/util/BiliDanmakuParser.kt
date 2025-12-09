@@ -12,7 +12,14 @@ import org.xml.sax.helpers.DefaultHandler
 import java.io.InputStream
 import javax.xml.parsers.SAXParserFactory
 
-class BiliDanmakuParser : BaseDanmakuParser() {
+import master.flame.danmaku.danmaku.model.android.DanmakuContext
+
+class BiliDanmakuParser(private val context: DanmakuContext) : BaseDanmakuParser() {
+    
+    init {
+        // 确保 mContext 也被设置
+        setConfig(context)
+    }
 
     override fun parse(): IDanmakus {
         // 修正逻辑：mDataSource 是一个 Wrapper，需要调用 data() 才能拿到 InputStream
@@ -24,6 +31,10 @@ class BiliDanmakuParser : BaseDanmakuParser() {
                 val handler = XmlHandler()
                 parser.parse(InputSource(source), handler)
                 android.util.Log.d("BiliDanmakuParser", "✅ Parsed ${handler.danmakus.size()} danmaku items")
+                // 🔥 打印弹幕时间范围
+                if (handler.firstTime >= 0 && handler.lastTime >= 0) {
+                    android.util.Log.d("BiliDanmakuParser", "📊 Time range: first=${handler.firstTime}ms, last=${handler.lastTime}ms")
+                }
                 return handler.danmakus
             } catch (e: Exception) {
                 android.util.Log.e("BiliDanmakuParser", "❌ Parse failed", e)
@@ -38,6 +49,8 @@ class BiliDanmakuParser : BaseDanmakuParser() {
         val danmakus = Danmakus()
         private var item: BaseDanmaku? = null
         private var index = 0
+        var firstTime: Long = -1
+        var lastTime: Long = -1
 
         override fun startElement(uri: String, localName: String, qName: String, attributes: Attributes) {
             if (qName.equals("d", ignoreCase = true)) {
@@ -49,6 +62,10 @@ class BiliDanmakuParser : BaseDanmakuParser() {
                     val textSize = p[2].toFloat()
                     val color = p[3].toInt() or -0x1000000
 
+                    // 🔥 追踪时间范围
+                    if (firstTime < 0 || time < firstTime) firstTime = time
+                    if (time > lastTime) lastTime = time
+
                     // 1:滚动 4:底端 5:顶端
                     val itemType = when (type) {
                         4 -> BaseDanmaku.TYPE_FIX_BOTTOM
@@ -56,25 +73,32 @@ class BiliDanmakuParser : BaseDanmakuParser() {
                         else -> BaseDanmaku.TYPE_SCROLL_RL
                     }
 
-                    item = mContext.mDanmakuFactory.createDanmaku(itemType, mContext)?.apply {
+                    item = context.mDanmakuFactory.createDanmaku(itemType, context)?.apply {
                         this.time = time
-                        this.textSize = textSize * (mContext.displayer.density)
+                        // 🔥 使用传入的 context 计算字号
+                        this.textSize = textSize * (context.displayer.density - 0.6f) 
                         this.textColor = color
                         this.textShadowColor = -0x1000000
                         this.index = this@XmlHandler.index++
-                        this.flags = mContext?.mGlobalFlagValues
-                        // 🔥🔥 关键修复：设置 priority > 0，否则会被默认过滤器过滤掉
-                        this.priority = 1
+                        this.flags = context.mGlobalFlagValues
+                        this.priority = 10 
                     }
                 }
             }
         }
+
+
 
         override fun characters(ch: CharArray, start: Int, length: Int) {
             item?.let {
                 val text = String(ch, start, length)
                 DanmakuUtils.fillText(it, text)
                 danmakus.addItem(it)
+                
+                // 🔥 调试：打印前 5 条弹幕的内容
+                if (index <= 5) {
+                    android.util.Log.d("BiliDanmakuParser", "📝 Parsed #$index: time=${it.time}ms, type=${it.type}, text=$text")
+                }
             }
         }
 

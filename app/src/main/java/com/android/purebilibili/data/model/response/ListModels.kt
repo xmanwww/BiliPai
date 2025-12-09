@@ -3,6 +3,69 @@ package com.android.purebilibili.data.model.response
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+// --- 0. 通用简单响应（用于操作类接口如关注/收藏）---
+@Serializable
+data class SimpleApiResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 0
+)
+
+// --- 0.1 关注关系响应 ---
+@Serializable
+data class RelationResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: RelationData? = null
+)
+
+@Serializable
+data class RelationData(
+    val mid: Long = 0,
+    val attribute: Int = 0,  // 0=未关注, 2=已关注, 6=互相关注, 128=已拉黑
+    val mtime: Long = 0,
+    val tag: List<Int>? = null,
+    val special: Int = 0
+) {
+    // 是否已关注 (attribute == 2 或 6 表示已关注)
+    val isFollowing: Boolean get() = attribute == 2 || attribute == 6
+}
+
+// --- 0.2 收藏状态响应 ---
+@Serializable
+data class FavouredResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: FavouredData? = null
+)
+
+@Serializable
+data class FavouredData(
+    val count: Int = 0,
+    val favoured: Boolean = false
+)
+
+// --- 0.3 点赞状态响应 ---
+@Serializable
+data class HasLikedResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: Int = 0       // 0=未点赞, 1=已点赞
+)
+
+// --- 0.4 投币状态响应 ---
+@Serializable
+data class HasCoinedResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: CoinedData? = null
+)
+
+@Serializable
+data class CoinedData(
+    val multiply: Int = 0   // 已投币数量 (0/1/2)
+)
+
 // --- 1. 核心通用视频模型 (UI层使用) ---
 @Serializable
 data class VideoItem(

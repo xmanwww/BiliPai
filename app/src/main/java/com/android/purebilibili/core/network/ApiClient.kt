@@ -74,6 +74,69 @@ interface BilibiliApi {
         @Query("pn") pn: Int,     // 页码
         @Query("ps") ps: Int = 20 // 每页数量
     ): ReplyResponse // 复用 ReplyResponse 结构
+    
+    // 🔥🔥 [新增] 查询与 UP 主的关注关系
+    @GET("x/relation")
+    suspend fun getRelation(
+        @Query("fid") fid: Long  // UP 主 mid
+    ): RelationResponse
+    
+    // 🔥🔥 [新增] 查询视频是否已收藏
+    @GET("x/v2/fav/video/favoured")
+    suspend fun checkFavoured(
+        @Query("aid") aid: Long
+    ): FavouredResponse
+    
+    // 🔥🔥 [新增] 关注/取关 UP 主
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/relation/modify")
+    suspend fun modifyRelation(
+        @retrofit2.http.Field("fid") fid: Long,      // UP 主 mid
+        @retrofit2.http.Field("act") act: Int,        // 1=关注, 2=取关
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+    
+    // 🔥🔥 [新增] 收藏/取消收藏视频
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/v3/fav/resource/deal")
+    suspend fun dealFavorite(
+        @retrofit2.http.Field("rid") rid: Long,                    // 视频 aid
+        @retrofit2.http.Field("type") type: Int = 2,               // 资源类型 2=视频
+        @retrofit2.http.Field("add_media_ids") addIds: String = "", // 添加到的收藏夹 ID
+        @retrofit2.http.Field("del_media_ids") delIds: String = "", // 从收藏夹移除
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+    
+    // 🔥🔥 [新增] 点赞/取消点赞视频
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/web-interface/archive/like")
+    suspend fun likeVideo(
+        @retrofit2.http.Field("aid") aid: Long,
+        @retrofit2.http.Field("like") like: Int,   // 1=点赞, 2=取消点赞
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+    
+    // 🔥🔥 [新增] 查询是否已点赞
+    @GET("x/web-interface/archive/has/like")
+    suspend fun hasLiked(
+        @Query("aid") aid: Long
+    ): HasLikedResponse
+    
+    // 🔥🔥 [新增] 投币
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/web-interface/coin/add")
+    suspend fun coinVideo(
+        @retrofit2.http.Field("aid") aid: Long,
+        @retrofit2.http.Field("multiply") multiply: Int,       // 投币数量 1 或 2
+        @retrofit2.http.Field("select_like") selectLike: Int,  // 1=同时点赞, 0=不点赞
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+    
+    // 🔥🔥 [新增] 查询已投币数
+    @GET("x/web-interface/archive/coins")
+    suspend fun hasCoined(
+        @Query("aid") aid: Long
+    ): HasCoinedResponse
 }
 
 

@@ -85,6 +85,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
                             val cookies = response.headers().values("Set-Cookie")
                             var sessData = ""
+                            var biliJct = "" // 🔥 CSRF token
 
                             for (line in cookies) {
                                 if (line.contains("SESSDATA")) {
@@ -97,14 +98,29 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                         }
                                     }
                                 }
-                                if (sessData.isNotEmpty()) break
+                                // 🔥 提取 bili_jct (CSRF Token)
+                                if (line.contains("bili_jct")) {
+                                    val parts = line.split(";")
+                                    for (part in parts) {
+                                        val trimPart = part.trim()
+                                        if (trimPart.startsWith("bili_jct=")) {
+                                            biliJct = trimPart.substringAfter("bili_jct=")
+                                            break
+                                        }
+                                    }
+                                }
                             }
 
                             if (sessData.isNotEmpty()) {
                                 Log.d("LoginDebug", "✅ 成功提取 SESSDATA: $sessData")
+                                Log.d("LoginDebug", "✅ 成功提取 bili_jct: $biliJct")
 
                                 // 保存并更新缓存
                                 TokenManager.saveCookies(getApplication(), sessData)
+                                // 🔥 保存 CSRF Token (持久化)
+                                if (biliJct.isNotEmpty()) {
+                                    TokenManager.saveCsrf(getApplication(), biliJct)
+                                }
 
                                 isPolling = false
                                 withContext(Dispatchers.Main) {

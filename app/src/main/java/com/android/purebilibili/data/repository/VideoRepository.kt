@@ -195,13 +195,18 @@ object VideoRepository {
         map
     }
 
-    // 🔥🔥 [优化] 核心播放地址获取逻辑，带指数退避重试
-    private suspend fun fetchPlayUrlRecursive(bvid: String, cid: Long, targetQn: Int): PlayUrlData? {
-        // 🔥 策略改变：直接尝试获取，API 会自动返回用户可用的最高画质
-        // 不再强制递归降级，减少请求次数
+    // 🔥🔥 [优化] 核心播放地址获取逻辑，带指数退避重试和多层回退
+private suspend fun fetchPlayUrlRecursive(bvid: String, cid: Long, targetQn: Int): PlayUrlData? {
+    android.util.Log.d("VideoRepo", "🔥 fetchPlayUrlRecursive: bvid=$bvid, cid=$cid, targetQn=$targetQn")
+    
+    // 🔥 定义画质降级链
+    val qualityChain = listOf(targetQn, 80, 64, 32, 16).distinct()
+    
+    for (qn in qualityChain) {
+        android.util.Log.d("VideoRepo", "🔥 Trying quality: $qn")
         
-        var lastError: Exception? = null
-        var retryDelays = listOf(0L, 1000L, 2000L) // 立即、1秒、2秒
+        // 🔥 每个画质尝试多次（带指数退避）
+        val retryDelays = listOf(0L, 500L, 1500L, 3000L) // 4次尝试
         
         for ((attempt, delay) in retryDelays.withIndex()) {
             if (delay > 0) {
@@ -210,44 +215,46 @@ object VideoRepository {
             }
             
             try {
-                val data = fetchPlayUrlWithWbiInternal(bvid, cid, targetQn)
+                // 🔥 尝试 DASH 格式 (fnval=16，经过验证可用)
+                val data = fetchPlayUrlWithWbiInternal(bvid, cid, qn, fnval = 16)
                 if (data != null && (!data.durl.isNullOrEmpty() || !data.dash?.video.isNullOrEmpty())) {
-                    android.util.Log.d("VideoRepo", "🔥 Got valid PlayUrl on attempt ${attempt + 1}: requested=$targetQn, actual=${data.quality}")
+                    android.util.Log.d("VideoRepo", "✅ Got DASH PlayUrl: requested=$qn, actual=${data.quality}")
                     return data
                 }
-            } catch (e: Exception) {
-                lastError = e
-                android.util.Log.w("VideoRepo", "fetchPlayUrl attempt ${attempt + 1} failed: ${e.message}")
                 
-                // 🔥 如果是 WBI Key 错误，尝试刷新缓存
-                if (e.message?.contains("Wbi Keys Error") == true) {
+                // 🔥 DASH失败时尝试传统 durl 格式 (fnval=0)
+                val durlData = fetchPlayUrlWithWbiInternal(bvid, cid, qn, fnval = 0)
+                if (durlData != null && !durlData.durl.isNullOrEmpty()) {
+                    android.util.Log.d("VideoRepo", "✅ Got durl PlayUrl: requested=$qn, actual=${durlData.quality}")
+                    return durlData
+                }
+                
+            } catch (e: Exception) {
+                android.util.Log.w("VideoRepo", "fetchPlayUrl attempt ${attempt + 1} for qn=$qn failed: ${e.message}")
+                
+                // 🔥 如果是 WBI Key 错误，清除缓存并刷新
+                if (e.message?.contains("Wbi Keys Error") == true || e.message?.contains("412") == true) {
                     wbiKeysCache = null
                     wbiKeysTimestamp = 0
                 }
             }
         }
-        
-        // 🔥 所有重试都失败后，尝试降级画质（只降一级）
-        if (targetQn > 64) {
-            android.util.Log.d("VideoRepo", "🔥 All retries failed, trying lower quality...")
-            kotlinx.coroutines.delay(500)
-            return fetchPlayUrlRecursive(bvid, cid, 64) // 降级到 720P
-        }
-        
-        android.util.Log.e("VideoRepo", "🔥 fetchPlayUrlRecursive completely failed for bvid=$bvid")
-        return null
     }
+    
+    android.util.Log.e("VideoRepo", "❌ fetchPlayUrlRecursive completely failed for bvid=$bvid after trying all qualities")
+    return null
+}    
 
     // 🔥 内部方法：单次请求播放地址
-    private suspend fun fetchPlayUrlWithWbiInternal(bvid: String, cid: Long, qn: Int): PlayUrlData? {
-        android.util.Log.d("VideoRepo", "fetchPlayUrlWithWbiInternal: bvid=$bvid, cid=$cid, qn=$qn")
+    private suspend fun fetchPlayUrlWithWbiInternal(bvid: String, cid: Long, qn: Int, fnval: Int = 16): PlayUrlData? {
+        android.util.Log.d("VideoRepo", "fetchPlayUrlWithWbiInternal: bvid=$bvid, cid=$cid, qn=$qn, fnval=$fnval")
         
         // 🔥 使用缓存的 Keys
         val (imgKey, subKey) = getWbiKeys()
         
         val params = mapOf(
             "bvid" to bvid, "cid" to cid.toString(), "qn" to qn.toString(),
-            "fnval" to "16", "fnver" to "0", "fourk" to "1", "platform" to "html5", "high_quality" to "1"
+            "fnval" to fnval.toString(), "fnver" to "0", "fourk" to "1", "platform" to "html5", "high_quality" to "1"
         )
         val signedParams = WbiUtils.sign(params, imgKey, subKey)
         val response = api.getPlayUrl(signedParams)

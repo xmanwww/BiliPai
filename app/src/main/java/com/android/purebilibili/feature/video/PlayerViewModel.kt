@@ -37,6 +37,12 @@ sealed class PlayerUiState {
         // 🔥 登录与大会员状态
         val isLoggedIn: Boolean = false,
         val isVip: Boolean = false,  // 🔥 新增：大会员状态
+        // 🔥 新增：关注/收藏状态
+        val isFollowing: Boolean = false,
+        val isFavorited: Boolean = false,
+        // 🔥🔥 [新增] 点赞/投币状态
+        val isLiked: Boolean = false,
+        val coinCount: Int = 0,  // 已投币数量 (0/1/2)
 
         // 移除评论相关状态: replies, isRepliesLoading, replyCount, repliesError, isRepliesEnd, nextPage
 
@@ -53,6 +59,16 @@ class PlayerViewModel : ViewModel() {
 
     private val _toastEvent = Channel<String>()
     val toastEvent = _toastEvent.receiveAsFlow()
+    
+    // 🎉 庆祝动画状态
+    private val _likeBurstVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val likeBurstVisible = _likeBurstVisible.asStateFlow()
+    
+    private val _tripleCelebrationVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val tripleCelebrationVisible = _tripleCelebrationVisible.asStateFlow()
+    
+    fun dismissLikeBurst() { _likeBurstVisible.value = false }
+    fun dismissTripleCelebration() { _tripleCelebrationVisible.value = false }
 
     private var currentBvid: String = ""
     private var currentCid: Long = 0
@@ -68,6 +84,161 @@ class PlayerViewModel : ViewModel() {
 
     fun getPlayerCurrentPosition(): Long = exoPlayer?.currentPosition ?: 0L
     fun getPlayerDuration(): Long = if ((exoPlayer?.duration ?: 0L) < 0) 0L else exoPlayer?.duration ?: 0L
+    
+    // 🔥🔥 新增：关注/取关 UP 主
+    fun toggleFollow() {
+        android.util.Log.d("PlayerViewModel", "🔥 toggleFollow() called")
+        val current = _uiState.value as? PlayerUiState.Success
+        if (current == null) {
+            android.util.Log.e("PlayerViewModel", "❌ toggleFollow: uiState is not Success")
+            return
+        }
+        val mid = current.info.owner.mid
+        val newFollowing = !current.isFollowing
+        android.util.Log.d("PlayerViewModel", "🔥 toggleFollow: mid=$mid, newFollowing=$newFollowing")
+        
+        viewModelScope.launch {
+            val result = com.android.purebilibili.data.repository.ActionRepository.followUser(mid, newFollowing)
+            result.onSuccess {
+                android.util.Log.d("PlayerViewModel", "✅ toggleFollow success: $it")
+                _uiState.value = current.copy(isFollowing = it)
+                _toastEvent.send(if (it) "关注成功" else "已取消关注")
+            }.onFailure {
+                android.util.Log.e("PlayerViewModel", "❌ toggleFollow failed: ${it.message}")
+                _toastEvent.send(it.message ?: "操作失败")
+            }
+        }
+    }
+    
+    // 🔥🔥 新增：收藏/取消收藏视频
+    fun toggleFavorite() {
+        android.util.Log.d("PlayerViewModel", "🔥 toggleFavorite() called")
+        val current = _uiState.value as? PlayerUiState.Success
+        if (current == null) {
+            android.util.Log.e("PlayerViewModel", "❌ toggleFavorite: uiState is not Success")
+            return
+        }
+        val aid = current.info.aid
+        val newFavorited = !current.isFavorited
+        android.util.Log.d("PlayerViewModel", "🔥 toggleFavorite: aid=$aid, newFavorited=$newFavorited")
+        
+        viewModelScope.launch {
+            val result = com.android.purebilibili.data.repository.ActionRepository.favoriteVideo(aid, newFavorited)
+            result.onSuccess {
+                android.util.Log.d("PlayerViewModel", "✅ toggleFavorite success: $it")
+                // 🔥 更新收藏状态和计数
+                val newStat = current.info.stat.copy(
+                    favorite = current.info.stat.favorite + (if (it) 1 else -1)
+                )
+                val newInfo = current.info.copy(stat = newStat)
+                _uiState.value = current.copy(info = newInfo, isFavorited = it)
+                _toastEvent.send(if (it) "已收藏" else "已取消收藏")
+            }.onFailure {
+                android.util.Log.e("PlayerViewModel", "❌ toggleFavorite failed: ${it.message}")
+                _toastEvent.send(it.message ?: "操作失败")
+            }
+        }
+    }
+    
+    // 🔥🔥 [新增] 点赞/取消点赞
+    fun toggleLike() {
+        android.util.Log.d("PlayerViewModel", "🔥 toggleLike() called")
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        val aid = current.info.aid
+        val newLiked = !current.isLiked
+        
+        viewModelScope.launch {
+            val result = com.android.purebilibili.data.repository.ActionRepository.likeVideo(aid, newLiked)
+            result.onSuccess {
+                // 🔥 更新点赞状态和计数
+                val newStat = current.info.stat.copy(
+                    like = current.info.stat.like + (if (it) 1 else -1)
+                )
+                val newInfo = current.info.copy(stat = newStat)
+                _uiState.value = current.copy(info = newInfo, isLiked = it)
+                // 🎉 点赞成功时触发庆祝动画
+                if (it) _likeBurstVisible.value = true
+                _toastEvent.send(if (it) "点赞成功" else "已取消点赞")
+            }.onFailure {
+                _toastEvent.send(it.message ?: "操作失败")
+            }
+        }
+    }
+    
+    // 🔥🔥 [新增] 投币对话框状态
+    private val _coinDialogVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val coinDialogVisible = _coinDialogVisible.asStateFlow()
+    
+    fun openCoinDialog() {
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        if (current.coinCount >= 2) {
+            viewModelScope.launch { _toastEvent.send("已投满2个硬币") }
+            return
+        }
+        _coinDialogVisible.value = true
+    }
+    
+    fun closeCoinDialog() {
+        _coinDialogVisible.value = false
+    }
+    
+    // 🔥🔥 [新增] 执行投币
+    fun doCoin(count: Int, alsoLike: Boolean) {
+        android.util.Log.d("PlayerViewModel", "🔥 doCoin: count=$count, alsoLike=$alsoLike")
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        val aid = current.info.aid
+        
+        _coinDialogVisible.value = false
+        
+        viewModelScope.launch {
+            val result = com.android.purebilibili.data.repository.ActionRepository.coinVideo(aid, count, alsoLike)
+            result.onSuccess {
+                val newCoinCount = minOf(current.coinCount + count, 2)
+                var newState = current.copy(coinCount = newCoinCount)
+                if (alsoLike && !current.isLiked) {
+                    newState = newState.copy(isLiked = true)
+                }
+                _uiState.value = newState
+                _toastEvent.send("投币成功")
+            }.onFailure {
+                _toastEvent.send(it.message ?: "投币失败")
+            }
+        }
+    }
+    
+    // 🔥🔥 [新增] 一键三连
+    fun doTripleAction() {
+        android.util.Log.d("PlayerViewModel", "🔥 doTripleAction() called")
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        val aid = current.info.aid
+        
+        viewModelScope.launch {
+            _toastEvent.send("正在三连...")
+            val result = com.android.purebilibili.data.repository.ActionRepository.tripleAction(aid)
+            result.onSuccess { tripleResult ->
+                // 更新状态
+                var newState = current
+                if (tripleResult.likeSuccess) newState = newState.copy(isLiked = true)
+                if (tripleResult.coinSuccess) newState = newState.copy(coinCount = 2)
+                if (tripleResult.favoriteSuccess) newState = newState.copy(isFavorited = true)
+                _uiState.value = newState
+                
+                // 构建反馈消息
+                val parts = mutableListOf<String>()
+                if (tripleResult.likeSuccess) parts.add("点赞✓")
+                if (tripleResult.coinSuccess) parts.add("投币✓")
+                else if (tripleResult.coinMessage != null) parts.add("投币:${tripleResult.coinMessage}")
+                if (tripleResult.favoriteSuccess) parts.add("收藏✓")
+                
+                val allSuccess = tripleResult.likeSuccess && tripleResult.coinSuccess && tripleResult.favoriteSuccess
+                // 🎉 三连成功时触发庆祝动画
+                if (allSuccess) _tripleCelebrationVisible.value = true
+                _toastEvent.send(if (allSuccess) "三连成功！" else parts.joinToString(" "))
+            }.onFailure {
+                _toastEvent.send(it.message ?: "三连失败")
+            }
+        }
+    }
     fun seekTo(pos: Long) { exoPlayer?.seekTo(pos) }
 
     override fun onCleared() {
@@ -172,6 +343,30 @@ class PlayerViewModel : ViewModel() {
                     val isLogin = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
                     val isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
                     
+                    // 🔥🔥 [新增] 异步检查关注和收藏状态
+                    val isFollowingDeferred = async { 
+                        if (isLogin) com.android.purebilibili.data.repository.ActionRepository.checkFollowStatus(info.owner.mid) 
+                        else false 
+                    }
+                    val isFavoritedDeferred = async { 
+                        if (isLogin) com.android.purebilibili.data.repository.ActionRepository.checkFavoriteStatus(info.aid) 
+                        else false 
+                    }
+                    // 🔥🔥 [新增] 异步检查点赞和投币状态
+                    val isLikedDeferred = async {
+                        if (isLogin) com.android.purebilibili.data.repository.ActionRepository.checkLikeStatus(info.aid)
+                        else false
+                    }
+                    val coinCountDeferred = async {
+                        if (isLogin) com.android.purebilibili.data.repository.ActionRepository.checkCoinStatus(info.aid)
+                        else 0
+                    }
+                    
+                    val isFollowing = isFollowingDeferred.await()
+                    val isFavorited = isFavoritedDeferred.await()
+                    val isLiked = isLikedDeferred.await()
+                    val coinCount = coinCountDeferred.await()
+                    
                     _uiState.value = PlayerUiState.Success(
                         info = info,
                         playUrl = videoUrl,
@@ -183,7 +378,11 @@ class PlayerViewModel : ViewModel() {
                         startPosition = 0L,
                         emoteMap = emoteMap,
                         isLoggedIn = isLogin,
-                        isVip = isVip
+                        isVip = isVip,
+                        isFollowing = isFollowing,
+                        isFavorited = isFavorited,
+                        isLiked = isLiked,
+                        coinCount = coinCount
                     )
                     // 移除 loadComments 调用
                 } else {
