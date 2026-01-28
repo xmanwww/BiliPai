@@ -477,6 +477,10 @@ class LivePlayerViewModel : ViewModel() {
         }
     }
     
+    // [新增] 记录最近发送的弹幕（用于去重WebSocket回传）
+    private var recentSentDanmaku: String? = null
+    private var recentSentTime: Long = 0L
+    
     /**
      * 发送弹幕
      */
@@ -486,22 +490,22 @@ class LivePlayerViewModel : ViewModel() {
         viewModelScope.launch {
             val result = LiveRepository.sendDanmaku(currentRoomId, text)
             result.onSuccess {
+                // 记录发送的弹幕（用于去重）
+                recentSentDanmaku = text
+                recentSentTime = System.currentTimeMillis()
+                
                 // 发送成功，模拟一条本地弹幕立即上屏
-                // 注意：B站API也会通过WebSocket推送自己发送的弹幕，这里可能造成重复
-                // 但为了体验（立即上屏），我们可以先显示，WebSocket收到的可以通过 ID 去重（如果支持）
-                // 目前简单处理：直接显示
                 val mid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
                 val item = LiveDanmakuItem(
                     text = text,
                     color = 16777215, // White
                     mode = 1, // Scroll
                     uid = mid,
-                    uname = "我", // 暂无缓存用户名，使用默认值
+                    uname = "我",
                     isSelf = true
                 )
                 _danmakuFlow.tryEmit(item)
             }.onFailure { e ->
-                // 发送失败处理，比如 Toast 提示 (这里简单打印日志，UI 层可观察错误流)
                 android.util.Log.e("LivePlayer", "Send danmaku failed: ${e.message}")
             }
         }
@@ -551,13 +555,27 @@ class LivePlayerViewModel : ViewModel() {
                     
                     // 过滤非法弹幕
                     if (text.isNotEmpty()) {
+                        // [去重] 检查是否是自己刚发送的弹幕的回传
+                        // 条件：uid 匹配 + 文本匹配 + 10秒内发送
+                        val myMid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
+                        val isRecentlyMySent = uid == myMid 
+                            && text == recentSentDanmaku 
+                            && (System.currentTimeMillis() - recentSentTime) < 10_000L
+                        
+                        if (isRecentlyMySent) {
+                            // 清除记录，避免后续相同文本的弹幕被误过滤
+                            recentSentDanmaku = null
+                            android.util.Log.d("LivePlayer", "🔄 Skipped duplicate self-sent danmaku: $text")
+                            return
+                        }
+                        
                         val item = LiveDanmakuItem(
                             text = text,
                             color = color,
                             mode = mode,
                             uid = uid,
                             uname = uname,
-                            isSelf = uid == currentUid, // 标记是否自己发送
+                            isSelf = uid == myMid, // 使用缓存的 mid 而不是 currentUid
                             emoticonUrl = emoticonUrl,
                             // [新增] 粉丝牌信息 info[3]
                             // [level, name, anchor_name, room_id, color, ...]

@@ -28,9 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Bilibili Pink
-private val BiliPink = Color(0xFFFB7299)
-private val BiliPinkLight = Color(0xFFFF9BB8)
+// 主题色将在 Composable 内通过 MaterialTheme.colorScheme.primary 获取
 private val PanelBackground = Color(0xFF1E1E1E)
 private val CardBackground = Color(0xFF2A2A2A)
 
@@ -225,7 +223,10 @@ private fun DanmakuAreaSelector(
                                 if (isSelected) {
                                     Modifier.background(
                                         brush = Brush.verticalGradient(
-                                            colors = listOf(BiliPink, BiliPinkLight)
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.primary,
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                            )
                                         )
                                     )
                                 } else {
@@ -289,12 +290,12 @@ private fun DanmakuSliderItem(
                 fontWeight = FontWeight.Medium
             )
             Surface(
-                color = BiliPink.copy(0.15f),
+                color = MaterialTheme.colorScheme.primary.copy(0.15f),
                 shape = RoundedCornerShape(6.dp)
             ) {
                 Text(
                     text = displayValue(localValue),
-                    color = BiliPink,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -313,7 +314,7 @@ private fun DanmakuSliderItem(
             valueRange = valueRange,
             colors = SliderDefaults.colors(
                 thumbColor = Color.White,
-                activeTrackColor = BiliPink,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = Color.White.copy(0.15f)
             ),
             modifier = Modifier.fillMaxWidth()

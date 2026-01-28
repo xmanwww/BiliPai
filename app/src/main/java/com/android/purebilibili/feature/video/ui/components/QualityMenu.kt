@@ -120,7 +120,7 @@ fun QualitySelectionMenu(
                         if (tag != null) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
-                                color = if (tag == "大会员") Color(0xFFFB7299) else Color(0xFF666666),
+                                color = if (tag == "大会员") MaterialTheme.colorScheme.primary else Color(0xFF666666),
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(

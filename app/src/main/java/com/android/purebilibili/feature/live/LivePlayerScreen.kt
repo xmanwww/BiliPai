@@ -442,7 +442,7 @@ private fun AnchorInfoBar(
             Button(
                 onClick = onFollowClick,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isFollowing) Color(0xFFE3E5E7) else Color(0xFFFB7299),
+                    containerColor = if (isFollowing) Color(0xFFE3E5E7) else MaterialTheme.colorScheme.primary,
                     contentColor = if (isFollowing) Color(0xFF9499A0) else Color.White
                 ),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),

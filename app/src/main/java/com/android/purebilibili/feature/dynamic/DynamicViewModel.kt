@@ -1,6 +1,8 @@
 // 文件路径: feature/dynamic/DynamicViewModel.kt
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.feature.dynamic.components.DynamicDisplayMode
+
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
@@ -66,6 +68,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val _showHiddenUsers = MutableStateFlow(false)
     val showHiddenUsers: StateFlow<Boolean> = _showHiddenUsers.asStateFlow()
 
+    //  [新增] 显示模式状态
+    private val _displayMode = MutableStateFlow(DynamicDisplayMode.SIDEBAR)
+    val displayMode: StateFlow<DynamicDisplayMode> = _displayMode.asStateFlow()
+
     init {
         loadUserPreferences()
         loadCachedDynamics()
@@ -84,6 +90,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             .toSet()
         _pinnedUserIds.value = pinned
         _hiddenUserIds.value = hidden
+
+        // 加载显示模式
+        val modeName = userPrefs.getString(KEY_DISPLAY_MODE, DynamicDisplayMode.SIDEBAR.name)
+        _displayMode.value = try {
+            DynamicDisplayMode.valueOf(modeName ?: DynamicDisplayMode.SIDEBAR.name)
+        } catch (e: Exception) {
+            DynamicDisplayMode.SIDEBAR
+        }
     }
 
     private fun saveUserPreferences(pinned: Set<Long>, hidden: Set<Long>) {
@@ -400,6 +414,16 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         rebuildFollowedUsers()
+    }
+
+    /**
+     *  [新增] 切换显示模式并保存
+     */
+    fun setDisplayMode(mode: DynamicDisplayMode) {
+        _displayMode.value = mode
+        userPrefs.edit()
+            .putString(KEY_DISPLAY_MODE, mode.name)
+            .apply()
     }
     
     /**
@@ -772,6 +796,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_DYNAMIC_CACHE_TIME = "dynamic_cache_time"
         private const val KEY_PINNED_USERS = "dynamic_pinned_users"
         private const val KEY_HIDDEN_USERS = "dynamic_hidden_users"
+        private const val KEY_DISPLAY_MODE = "dynamic_display_mode"
         private const val MAX_CACHE_ITEMS = 100
     }
 }

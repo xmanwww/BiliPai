@@ -169,13 +169,14 @@ class VideoPlayerState(
     
     /**
      * 🔄 重置视频尺寸状态（切换视频时调用）
+     * 注意：不重置 isPortraitFullscreen，允许连续切换视频时保持竖屏全屏模式
      */
     fun resetVideoSize() {
         _videoSize.value = Pair(0, 0)
         _apiDimension.value = null
         _isVerticalVideo.value = false
         _verticalVideoSource.value = VerticalVideoSource.UNKNOWN
-        _isPortraitFullscreen.value = false
+        // 不重置 _isPortraitFullscreen，保持竖屏全屏状态
     }
     
     fun release() {

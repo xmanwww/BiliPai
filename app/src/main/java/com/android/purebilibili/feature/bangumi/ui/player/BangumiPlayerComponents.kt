@@ -731,7 +731,7 @@ fun BangumiQualityMenu(
                         if (tag != null) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
-                                color = Color(0xFFFB7299),
+                                color = MaterialTheme.colorScheme.primary,
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(

@@ -1,6 +1,10 @@
 # BiliPai <img src="docs/images/233娘.jpeg" height="80" align="center">
 
 <p align="center">
+  <a href="README_EN.md">English</a> | <a href="README.md">简体中文</a>
+</p>
+
+<p align="center">
   <strong>原生、纯净、可扩展 —— 重新定义你的 B 站体验</strong>
 </p>
 

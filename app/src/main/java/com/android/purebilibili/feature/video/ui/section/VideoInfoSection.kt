@@ -282,14 +282,14 @@ fun UpInfoSection(
             Spacer(Modifier.height(2.dp))
             // Blue UP tag
             Surface(
-                color = Color(0xFF00AEEC).copy(alpha = 0.15f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                 shape = RoundedCornerShape(4.dp)
             ) {
                 Text(
                     text = "UP\u4e3b",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF00AEEC),
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }

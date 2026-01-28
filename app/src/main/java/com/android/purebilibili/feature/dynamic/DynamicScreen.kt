@@ -102,7 +102,7 @@ fun DynamicScreen(
     val tabs = listOf("全部", "视频")
     
     //  布局模式状态（侧边栏/横向）
-    var displayMode by remember { mutableStateOf(DynamicDisplayMode.SIDEBAR) }
+    val displayMode by viewModel.displayMode.collectAsState()
     
     //  [Haze] 模糊状态
     val hazeState = remember { HazeState() }
@@ -260,7 +260,7 @@ fun DynamicScreen(
                                     tabs = tabs,
                                     onTabSelected = { selectedTab = it },
                                     displayMode = displayMode,
-                                    onDisplayModeChange = { displayMode = it },
+                                    onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     hazeState = hazeState, // 传入 hazeState
                                     modifier = Modifier.align(Alignment.TopCenter)
                                 )
@@ -327,7 +327,7 @@ fun DynamicScreen(
                                          tabs = tabs,
                                          onTabSelected = { selectedTab = it },
                                          displayMode = displayMode,
-                                         onDisplayModeChange = { displayMode = it },
+                                         onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                          hazeState = null // 禁用内部模糊，由外层统一处理
                                      )
                                      

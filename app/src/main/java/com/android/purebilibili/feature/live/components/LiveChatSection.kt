@@ -271,7 +271,7 @@ private fun ChatInputBar(onSend: (String) -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 15.sp
                 ),
-                cursorBrush = SolidColor(Color(0xFFFB7299)),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 decorationBox = { innerTextField ->
                     Box(
                         modifier = Modifier
@@ -309,7 +309,7 @@ private fun ChatInputBar(onSend: (String) -> Unit) {
                 },
                 enabled = isEnabled,
                 shape = CircleShape,
-                color = if (isEnabled) Color(0xFFFB7299) else Color(0xFFE3E5E7), // B站粉 vs 禁用灰
+                color = if (isEnabled) MaterialTheme.colorScheme.primary else Color(0xFFE3E5E7), // 主题色 vs 禁用灰
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {

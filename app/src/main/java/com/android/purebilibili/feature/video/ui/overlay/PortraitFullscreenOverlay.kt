@@ -5,6 +5,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,13 +73,16 @@ fun PortraitFullscreenOverlay(
 ) {
     var showControls by remember { mutableStateOf(true) }
     
+    @OptIn(ExperimentalFoundationApi::class)
     Box(
         modifier = modifier
             .fillMaxSize()
-            .clickable(
+            .combinedClickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null
-            ) { showControls = !showControls }
+                indication = null,
+                onClick = { showControls = !showControls },
+                onDoubleClick = { onPlayPause() }  // 双击暂停/播放
+            )
     ) {
         
         // 控件层 (带淡入淡出动画)

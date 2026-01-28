@@ -45,6 +45,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.draggable
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -1043,8 +1046,29 @@ fun VideoDetailScreen(
             }  // else shouldUseSplitLayout
         }  // else targetIsLandscape
         // 📱 [新增] 竖屏全屏覆盖层
-        if (isPortraitFullscreen && !isLandscape && uiState is PlayerUiState.Success) {
-            val success = uiState as PlayerUiState.Success
+        // [修复] 在 Loading 状态时也保持竖屏全屏，使用上一个成功状态的数据
+        // 这解决了切换视频时瞬间退出全屏的问题
+        val showPortraitFullscreen = isPortraitFullscreen && !isLandscape && 
+            (uiState is PlayerUiState.Success || uiState is PlayerUiState.Loading)
+        
+        // 缓存上一个成功状态以在 Loading 时使用
+        var cachedSuccess by remember { mutableStateOf<PlayerUiState.Success?>(null) }
+        LaunchedEffect(uiState) {
+            if (uiState is PlayerUiState.Success) {
+                cachedSuccess = uiState as PlayerUiState.Success
+            }
+        }
+        
+        // 获取当前或缓存的成功状态
+        val success = when {
+            uiState is PlayerUiState.Success -> uiState as PlayerUiState.Success
+            uiState is PlayerUiState.Loading && cachedSuccess != null -> cachedSuccess!!
+            else -> null
+        }
+        
+        val isLoadingNewVideo = uiState is PlayerUiState.Loading
+        
+        if (showPortraitFullscreen && success != null) {
             
             // 监听播放器进度
             val progressState by produceState(
@@ -1206,10 +1230,94 @@ fun VideoDetailScreen(
             var currentSpeed by remember { mutableFloatStateOf(playerState.player.playbackParameters.speed) }
             var currentRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
             
+            // [新增] 竖屏滑动切换视频状态
+            val verticalOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val screenHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+                configuration.screenHeightDp.dp.toPx()
+            }
+            
+            // 滑动切换视频的阈值（屏幕高度的 15%）
+            val swipeThreshold = screenHeightPx * 0.15f
+            val velocityThreshold = 800f // px/s
+            
+            // 用于记录拖拽状态
+            val draggableState = remember {
+                androidx.compose.foundation.gestures.DraggableState { delta ->
+                    scope.launch {
+                        verticalOffset.snapTo(verticalOffset.value + delta)
+                    }
+                }
+            }
+            // 记录拖拽速度
+            var lastVelocity by remember { mutableFloatStateOf(0f) }
+            
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(androidx.compose.ui.graphics.Color.Black)
+                    // [关键] 使用 offset 而不是 graphicsLayer，确保触摸热区随视觉移动
+                    .offset { androidx.compose.ui.unit.IntOffset(0, verticalOffset.value.toInt()) }
+                    // [新增] 使用 draggable 替代 pointerInput，不阻塞点击事件
+                    .draggable(
+                        state = draggableState,
+                        orientation = androidx.compose.foundation.gestures.Orientation.Vertical,
+                        onDragStarted = { _ ->
+                            // 拖拽开始
+                        },
+                        onDragStopped = { velocity ->
+                            lastVelocity = velocity
+                            val currentOffset = verticalOffset.value
+                            
+                            // 判断是否触发切换
+                            val isSwipeUp = currentOffset < -swipeThreshold || (velocity < -velocityThreshold && currentOffset < 0)
+                            val isSwipeDown = currentOffset > swipeThreshold || (velocity > velocityThreshold && currentOffset > 0)
+                            
+                            scope.launch {
+                                if (isSwipeUp) {
+                                    // 上滑 -> 下一个视频
+                                    verticalOffset.animateTo(
+                                        targetValue = -screenHeightPx,
+                                        animationSpec = androidx.compose.animation.core.tween(300)
+                                    )
+                                    viewModel.playNextRecommended()
+                                    // 从下方滑入
+                                    verticalOffset.snapTo(screenHeightPx)
+                                    verticalOffset.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = androidx.compose.animation.core.spring(
+                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                                        )
+                                    )
+                                } else if (isSwipeDown) {
+                                    // 下滑 -> 上一个视频
+                                    verticalOffset.animateTo(
+                                        targetValue = screenHeightPx,
+                                        animationSpec = androidx.compose.animation.core.tween(300)
+                                    )
+                                    viewModel.playPreviousRecommended()
+                                    // 从上方滑入
+                                    verticalOffset.snapTo(-screenHeightPx)
+                                    verticalOffset.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = androidx.compose.animation.core.spring(
+                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                                        )
+                                    )
+                                } else {
+                                    // 回弹
+                                    verticalOffset.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = androidx.compose.animation.core.spring(
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    )
             ) {
                 // 视频播放器
                 androidx.compose.ui.viewinterop.AndroidView(
@@ -1390,6 +1498,32 @@ fun VideoDetailScreen(
                         )
                     }
                 }
+                
+                // [新增] 加载新视频时显示加载指示器
+                if (isLoadingNewVideo) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.6f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = com.android.purebilibili.core.theme.BiliPink,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "正在加载新视频...",
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
             }
         }
         //  [新增] 投币对话框
@@ -1401,6 +1535,75 @@ fun VideoDetailScreen(
             onDismiss = { viewModel.closeCoinDialog() },
             onConfirm = { count, alsoLike -> viewModel.doCoin(count, alsoLike) }
         )
+        
+        // [新增] 播放完成选择对话框
+        val showPlaybackEndedDialog by viewModel.showPlaybackEndedDialog.collectAsState()
+        if (showPlaybackEndedDialog) {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { viewModel.dismissPlaybackEndedDialog() }
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "播放完成",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        Text(
+                            text = "选择接下来的操作",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        // 重播按钮
+                        Button(
+                            onClick = {
+                                viewModel.dismissPlaybackEndedDialog()
+                                playerState.player.seekTo(0)
+                                playerState.player.play()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text("🔄 重播当前视频")
+                        }
+                        
+                        // 播放下一个按钮
+                        Button(
+                            onClick = {
+                                viewModel.dismissPlaybackEndedDialog()
+                                viewModel.playNextRecommended()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("▶️ 播放下一个视频")
+                        }
+                        
+                        // 关闭按钮
+                        TextButton(
+                            onClick = { viewModel.dismissPlaybackEndedDialog() }
+                        ) {
+                            Text("暂不操作")
+                        }
+                    }
+                }
+            }
+        }
         
         //  [新增] 弹幕发送对话框
         val showDanmakuDialog by viewModel.showDanmakuDialog.collectAsState()

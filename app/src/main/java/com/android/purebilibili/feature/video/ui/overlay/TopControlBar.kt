@@ -95,7 +95,7 @@ fun TopControlBar(
                 Icon(
                     imageVector = if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Outlined.TextBubble,
                     contentDescription = if (danmakuEnabled) "Disable danmaku" else "Enable danmaku",
-                    tint = if (danmakuEnabled) Color(0xFFFB7299) else Color.White.copy(alpha = 0.6f),
+                    tint = if (danmakuEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.size(20.dp)
                 )
             }

@@ -136,6 +136,18 @@ class PlayerViewModel : ViewModel() {
     private val _viewPoints = MutableStateFlow<List<ViewPoint>>(emptyList())
     val viewPoints = _viewPoints.asStateFlow()
     
+    // [新增] 播放完成选择对话框状态
+    private val _showPlaybackEndedDialog = MutableStateFlow(false)
+    val showPlaybackEndedDialog = _showPlaybackEndedDialog.asStateFlow()
+    
+    fun dismissPlaybackEndedDialog() {
+        _showPlaybackEndedDialog.value = false
+    }
+    
+    fun showPlaybackEndedDialogIfNeeded() {
+        _showPlaybackEndedDialog.value = true
+    }
+    
     // Internal state
     private var currentBvid = ""
     private var currentCid = 0L
@@ -253,9 +265,8 @@ class PlayerViewModel : ViewModel() {
                     // 🎵 [修复] 优先播放下一个分P，没有分P时再播放推荐视频
                     playNextPageOrRecommended()
                 } else {
-                    // 自动播放关闭，只显示提示
-                    // 播放器应该保持在完成状态，这样播放按钮可以重新开始播放
-                    toast(" 播放完成")
+                    // 自动播放关闭，显示选择对话框
+                    _showPlaybackEndedDialog.value = true
                 }
             }
         }
@@ -479,121 +490,135 @@ class PlayerViewModel : ViewModel() {
                 com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "📉 省流量模式(${dataSaverMode.label}): 限制画质为480P")
             }
             
-            when (val result = playbackUseCase.loadVideo(
-                bvid, 
-                aid, 
-                finalQuality, 
-                audioQualityPreference, 
-                videoCodecPreference
-            )) {
-                is VideoLoadResult.Success -> {
-                    currentCid = result.info.cid
-                    
-                    // Play video
-                    if (!shouldSkipPlayerPrepare) {
-                        if (result.audioUrl != null) {
-                            playbackUseCase.playDashVideo(result.playUrl, result.audioUrl, cachedPosition)
-                        } else {
-                            playbackUseCase.playVideo(result.playUrl, cachedPosition)
-                        }
-                    } else {
-                         // 🎯 Skip preparing player, but ensure it's playing if needed
-                         Logger.d("PlayerVM", "🎯 Skipping player preparation (already playing)")
-                         exoPlayer?.let { p ->
-                             p.volume = 1.0f
-                             if (!p.isPlaying) p.play()
-                         }
-                    }
-                    
-                    //  收集所有 CDN URL (主+备用)
-                    val allVideoUrls = buildList {
-                        add(result.playUrl)
-                        result.cachedDashVideos
-                            .find { it.id == result.quality }
-                            ?.backupUrl
-                            ?.filterNotNull()
-                            ?.filter { it.isNotEmpty() }
-                            ?.let { addAll(it) }
-                    }.distinct()
-                    
-                    val allAudioUrls = buildList {
-                        result.audioUrl?.let { add(it) }
-                        result.cachedDashAudios.firstOrNull()
-                            ?.backupUrl
-                            ?.filterNotNull()
-                            ?.filter { it.isNotEmpty() }
-                            ?.let { addAll(it) }
-                    }.distinct()
-                    
-                    Logger.d("PlayerVM", "📡 CDN 线路: 视频${allVideoUrls.size}个, 音频${allAudioUrls.size}个")
-                    
-                    _uiState.value = PlayerUiState.Success(
-                        info = result.info,
-                        playUrl = result.playUrl,
-                        audioUrl = result.audioUrl,
-                        related = result.related,
-                        currentQuality = result.quality,
-                        qualityIds = result.qualityIds,
-                        qualityLabels = result.qualityLabels,
-                        cachedDashVideos = result.cachedDashVideos,
-                        cachedDashAudios = result.cachedDashAudios,
-                        emoteMap = result.emoteMap,
-                        isLoggedIn = result.isLoggedIn,
-                        isVip = result.isVip,
-                        isFollowing = result.isFollowing,
-                        isFavorited = result.isFavorited,
-                        isLiked = result.isLiked,
-                        coinCount = result.coinCount,
-                        //  CDN 线路
-                        currentCdnIndex = 0,
-                        allVideoUrls = allVideoUrls,
-
-                        allAudioUrls = allAudioUrls,
-                        // [New] Codec/Audio info
-                        videoCodecId = result.videoCodecId,
-                        audioCodecId = result.audioCodecId
+            try {
+                // 🛡️ [修复] 增加超时保护，防止加载无限挂起
+                val result = kotlinx.coroutines.withTimeout(15000L) {
+                    playbackUseCase.loadVideo(
+                        bvid, 
+                        aid, 
+                        finalQuality, 
+                        audioQualityPreference, 
+                        videoCodecPreference
                     )
-                    
-                    //  [新增] 异步加载关注列表（用于推荐视频的已关注标签）
-                    if (result.isLoggedIn) {
-                        loadFollowingMids()
-                    }
-                    
-                    //  异步加载视频标签
-                    loadVideoTags(bvid)
-                    
-                    // 🖼️ 异步加载视频预览图（用于进度条拖动预览）
-                    loadVideoshot(bvid, result.info.cid)
-                    
-                    // 📖 异步加载视频章节信息（用于进度条章节标记）
-                    loadChapterInfo(bvid, result.info.cid)
-                    
-                    // 👀 [新增] 开始轮询在线观看人数
-                    startOnlineCountPolling(bvid, result.info.cid)
-                    
-                    //  [新增] 更新播放列表
-                    updatePlaylist(result.info, result.related)
-                    
-                    startHeartbeat()
-                    
-                    //  通知插件系统：视频已加载
-                    PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
-                        try {
-                            plugin.onVideoLoad(bvid, currentCid)
-                        } catch (e: Exception) {
-                            Logger.e("PlayerVM", "Plugin ${plugin.name} onVideoLoad failed", e)
+                }
+
+                when (result) {
+                    is VideoLoadResult.Success -> {
+                        currentCid = result.info.cid
+                        
+                        // Play video
+                        if (!shouldSkipPlayerPrepare) {
+                            if (result.audioUrl != null) {
+                                playbackUseCase.playDashVideo(result.playUrl, result.audioUrl, cachedPosition)
+                            } else {
+                                playbackUseCase.playVideo(result.playUrl, cachedPosition)
+                            }
+                        } else {
+                             // 🎯 Skip preparing player, but ensure it's playing if needed
+                             Logger.d("PlayerVM", "🎯 Skipping player preparation (already playing)")
+                             exoPlayer?.let { p ->
+                                 p.volume = 1.0f
+                                 if (!p.isPlaying) p.play()
+                             }
                         }
+                        
+                        //  收集所有 CDN URL (主+备用)
+                        val allVideoUrls = buildList {
+                            add(result.playUrl)
+                            result.cachedDashVideos
+                                .find { it.id == result.quality }
+                                ?.backupUrl
+                                ?.filterNotNull()
+                                ?.filter { it.isNotEmpty() }
+                                ?.let { addAll(it) }
+                        }.distinct()
+                        
+                        val allAudioUrls = buildList {
+                            result.audioUrl?.let { add(it) }
+                            result.cachedDashAudios.firstOrNull()
+                                ?.backupUrl
+                                ?.filterNotNull()
+                                ?.filter { it.isNotEmpty() }
+                                ?.let { addAll(it) }
+                        }.distinct()
+                        
+                        Logger.d("PlayerVM", "📡 CDN 线路: 视频${allVideoUrls.size}个, 音频${allAudioUrls.size}个")
+                        
+                        _uiState.value = PlayerUiState.Success(
+                            info = result.info,
+                            playUrl = result.playUrl,
+                            audioUrl = result.audioUrl,
+                            related = result.related,
+                            currentQuality = result.quality,
+                            qualityIds = result.qualityIds,
+                            qualityLabels = result.qualityLabels,
+                            cachedDashVideos = result.cachedDashVideos,
+                            cachedDashAudios = result.cachedDashAudios,
+                            emoteMap = result.emoteMap,
+                            isLoggedIn = result.isLoggedIn,
+                            isVip = result.isVip,
+                            isFollowing = result.isFollowing,
+                            isFavorited = result.isFavorited,
+                            isLiked = result.isLiked,
+                            coinCount = result.coinCount,
+                            //  CDN 线路
+                            currentCdnIndex = 0,
+                            allVideoUrls = allVideoUrls,
+
+                            allAudioUrls = allAudioUrls,
+                            // [New] Codec/Audio info
+                            videoCodecId = result.videoCodecId,
+                            audioCodecId = result.audioCodecId
+                        )
+                        
+                        //  [新增] 异步加载关注列表（用于推荐视频的已关注标签）
+                        if (result.isLoggedIn) {
+                            loadFollowingMids()
+                        }
+                        
+                        //  异步加载视频标签
+                        loadVideoTags(bvid)
+                        
+                        // 🖼️ 异步加载视频预览图（用于进度条拖动预览）
+                        loadVideoshot(bvid, result.info.cid)
+                        
+                        // 📖 异步加载视频章节信息（用于进度条章节标记）
+                        loadChapterInfo(bvid, result.info.cid)
+                        
+                        // 👀 [新增] 开始轮询在线观看人数
+                        startOnlineCountPolling(bvid, result.info.cid)
+                        
+                        //  [新增] 更新播放列表
+                        updatePlaylist(result.info, result.related)
+                        
+                        startHeartbeat()
+                        
+                        //  通知插件系统：视频已加载
+                        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+                            try {
+                                plugin.onVideoLoad(bvid, currentCid)
+                            } catch (e: Exception) {
+                                Logger.e("PlayerVM", "Plugin ${plugin.name} onVideoLoad failed", e)
+                            }
+                        }
+                        
+                        //  启动插件检查定时器
+                        startPluginCheck()
+                        
+                        AnalyticsHelper.logVideoPlay(bvid, result.info.title, result.info.owner.name)
                     }
-                    
-                    //  启动插件检查定时器
-                    startPluginCheck()
-                    
-                    AnalyticsHelper.logVideoPlay(bvid, result.info.title, result.info.owner.name)
+                    is VideoLoadResult.Error -> {
+                        CrashReporter.reportVideoError(bvid, "load_failed", result.error.toUserMessage())
+                        _uiState.value = PlayerUiState.Error(result.error, result.canRetry)
+                    }
                 }
-                is VideoLoadResult.Error -> {
-                    CrashReporter.reportVideoError(bvid, "load_failed", result.error.toUserMessage())
-                    _uiState.value = PlayerUiState.Error(result.error, result.canRetry)
-                }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                Logger.e("PlayerVM", "⚠️ Video load timed out for $bvid")
+                PlaybackCooldownManager.recordFailure(bvid, "timeout")
+                _uiState.value = PlayerUiState.Error(VideoLoadError.Timeout)
+            } catch (e: Exception) {
+                Logger.e("PlayerVM", "⚠️ Unexpected load exception", e)
+                _uiState.value = PlayerUiState.Error(VideoLoadError.UnknownError(e))
             }
         }
     }

@@ -15,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.theme.iOSBlue
+
 import com.android.purebilibili.data.model.response.UgcSeason
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronForward
@@ -57,13 +57,13 @@ fun CollectionRow(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(iOSBlue.copy(alpha = 0.15f)),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     CupertinoIcons.Default.Folder,
                     contentDescription = null,
-                    tint = iOSBlue,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -76,7 +76,7 @@ fun CollectionRow(
                     Text(
                         text = "合集",
                         style = MaterialTheme.typography.labelMedium,
-                        color = iOSBlue,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -101,7 +101,7 @@ fun CollectionRow(
                     // 进度条图标
                     Text(
                         text = "▸",
-                        color = iOSBlue,
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 10.sp
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -134,7 +134,7 @@ fun CollectionRow(
                     CupertinoIcons.Default.SquareAndArrowUp,
                     contentDescription = "分享合集",
                     modifier = Modifier.size(16.dp),
-                    tint = iOSBlue
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
             

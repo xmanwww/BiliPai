@@ -12,6 +12,9 @@ sealed class VideoLoadError {
     /** 网络连接错误（超时、无网络等） */
     object NetworkError : VideoLoadError()
     
+    /** 加载超时 */
+    object Timeout : VideoLoadError()
+    
     /** WBI 签名验证失败（412 风控等） */
     object WbiSignatureError : VideoLoadError()
     
@@ -53,6 +56,7 @@ sealed class VideoLoadError {
      */
     fun toUserMessage(): String = when (this) {
         is NetworkError -> "网络连接失败，请检查网络后重试"
+        is Timeout -> "加载超时，请重试"
         is WbiSignatureError -> "验证失败，正在重试..."
         is VideoNotFound -> "视频不存在或已被删除"
         is RegionRestricted -> "该视频在当前地区不可用"
@@ -75,6 +79,7 @@ sealed class VideoLoadError {
      */
     fun isRetryable(): Boolean = when (this) {
         is NetworkError -> true
+        is Timeout -> true
         is WbiSignatureError -> true
         is CidNotFound -> true
         is ApiError -> code in listOf(-412, -504, -502, -500) // 服务端临时错误

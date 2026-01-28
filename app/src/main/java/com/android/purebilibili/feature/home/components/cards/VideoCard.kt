@@ -373,7 +373,7 @@ fun ElegantVideoCard(
                     text = "已关注",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFFFB7299)  // B站粉红色
+                    color = MaterialTheme.colorScheme.primary  // 主题色
                 )
             }
             

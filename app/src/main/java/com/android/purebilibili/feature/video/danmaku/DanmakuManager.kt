@@ -467,7 +467,6 @@ class DanmakuManager private constructor(
                 //  同步弹幕速度：视频 2x 时，弹幕也需要 2 倍速滚动
                 // 通过减少 moveTime 来加快弹幕滚动
                 if (videoSpeed != currentVideoSpeed) {
-                    val previousSpeed = currentVideoSpeed
                     currentVideoSpeed = videoSpeed
                     
                     controller?.let { ctrl ->
@@ -476,14 +475,16 @@ class DanmakuManager private constructor(
                         val adjustedMoveTime = (originalMoveTime / videoSpeed).toLong()
                         ctrl.config.scroll.moveTime = adjustedMoveTime
                         
-                        // [问题10修复] 当从加速恢复到正常速度时，重新同步弹幕位置
-                        // 这防止长按快进后弹幕位置不同步
-                        if (previousSpeed > 1.0f && videoSpeed == 1.0f) {
-                            val currentPos = exoPlayer.currentPosition
-                            Log.w(TAG, "⏩ Speed returned to normal, resyncing danmaku at ${currentPos}ms")
-                            cachedDanmakuList?.let { list ->
-                                ctrl.setData(list, 0)
-                                ctrl.start(currentPos)
+                        // [关键修复] 任何倍速变化都需要立即同步弹幕到当前视频位置
+                        // 因为视频倍速变化后，弹幕引擎的内部时间线与视频时间线会产生偏差
+                        // 例如：2倍速播放5分钟后，视频在10分钟处，但弹幕引擎可能还在5分钟处
+                        val currentPos = exoPlayer.currentPosition
+                        Log.w(TAG, "⏩ Speed changed, resyncing danmaku at ${currentPos}ms")
+                        cachedDanmakuList?.let { list ->
+                            ctrl.setData(list, 0)
+                            ctrl.start(currentPos)
+                            if (!exoPlayer.isPlaying) {
+                                ctrl.pause()
                             }
                         }
                         
