@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.1.4] - 2026-02-08
+
+### 🛠 Improvements & Fixes (优化与修复)
+
+- **Playback Fix**: Resolved playback issues in certain scenarios.
+
 ## [5.1.3] - 2026-02-08
 
 ### ✨ New Features (新增功能)

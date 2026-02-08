@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-02-08 · 文档已同步至 v5.1.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-02-08 · 文档已同步至 v5.1.4（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-5.1.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-5.1.4-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -333,7 +333,7 @@ app/src/main/java/com/android/purebilibili/
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-02-08（v5.1.3）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-02-08（v5.1.4）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -370,17 +370,17 @@ app/src/main/java/com/android/purebilibili/
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v5.1.3 · 2026-02-08)
+### 最近更新 (v5.1.4 · 2026-02-08)
 
 - ✨ **搜索升级**：补齐搜索类型与交互流（视频 / UP / 番剧 / 直播），优化建议词与加载分页行为
 - ✨ **评论体验升级**：支持默认评论排序偏好，并修复特定排序下 UP 主/置顶评论无法显示的问题
 - ✨ **弹幕插件增强**：新增 UID/hash 级过滤能力，插件规则变更支持播放内热更新
-- 🛠 **播放器交互修复**：修复后台播放被错误暂停、手势误触亮度/音量、关闭自动连播后仍弹窗等问题
+- 🛠 **播放体验修复**：修复了某些情景下出现的播放问题，提升播放稳定性
 - 🛠 **界面与数据追踪**：新增横屏顶部时间栏，强化 Firebase Analytics + Crashlytics 上报链路
 
 ### 历史版本
 
-- v5.1.1 / v5.1.0 / v5.0.5 / v5.0.4 变更详情请查看 [CHANGELOG.md](CHANGELOG.md)
+- v5.1.3 / v5.1.1 / v5.1.0 / v5.0.5 / v5.0.4 变更详情请查看 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
