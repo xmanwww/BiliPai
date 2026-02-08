@@ -5,7 +5,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-4.3.2-fb7299?style=flat-square" alt="Version">
+  <sub>Last updated: 2026-02-08 · Synced to v5.1.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-5.1.3-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -15,7 +19,7 @@
   <img src="https://img.shields.io/badge/Platform-Android%2010+-brightgreen?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/APK-14MB-orange?style=flat-square" alt="Size">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/Plugins-3%20Built--in-blueviolet?style=flat-square" alt="Plugins">
+  <img src="https://img.shields.io/badge/Plugins-4%20Built--in-blueviolet?style=flat-square" alt="Plugins">
 </p>
 
 <p align="center">
@@ -50,7 +54,7 @@
 | **Background Play** | Continue listening when screen is off or in background |
 | **Playback History** | Automatically resume playback from where you left off |
 | **TV Login** | Scan QR code to login as TV client to unlock high quality |
-| **Plugin System** | Built-in SponsorBlock, AdBlock, and Danmaku Enhancement plugins |
+| **Plugin System** | Built-in SponsorBlock, AdBlock, Danmaku Enhancement, and Eye Protection plugins |
 
 ### 🔌 Plugin System
 
@@ -311,12 +315,13 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v4.3.0)
+### Latest (v5.1.3 · 2026-02-08)
 
-- 🛠 **Fix**: Video loading black screen issues, enforced HTTPS
-- 🐛 **Fix**: Portrait mode danmaku issues & custom download path (v4.2.4)
-- 💅 **Optimize**: PiP mode experience & emoji display (v4.2.3)
-- ✨ **Feat**: Splash Wallpaper & Guest Mode optimization (v4.2.0)
+- ✨ **Search upgrade**: Expanded search flows (Video/UP/Bangumi/Live) and improved suggestion + pagination behavior.
+- ✨ **Comments**: Added default comment sort preference and fixed missing uploader/pinned comments under some sort modes.
+- ✨ **Danmaku plugin**: Added UID/hash filtering and in-player hot refresh when plugin rules change.
+- 🛠 **Playback UX fixes**: Fixed unexpected background pause, reduced accidental gesture triggers, and removed intrusive completion popup when auto-next is disabled.
+- 🛠 **Observability**: Strengthened Firebase Analytics + Crashlytics event/error context.
 
 ---
 

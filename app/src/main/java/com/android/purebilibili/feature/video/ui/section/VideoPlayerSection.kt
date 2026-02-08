@@ -238,6 +238,8 @@ fun VideoPlayerSection(
     // 记录累计拖动距离
     var totalDragDistanceY by remember { mutableFloatStateOf(0f) }
     var totalDragDistanceX by remember { mutableFloatStateOf(0f) }
+    // 记录手势起点 X（用于锁定分区，避免拖动过程横向漂移导致误判）
+    var dragStartX by remember { mutableFloatStateOf(-1f) }
 
     fun getActivity(): Activity? = when (context) {
         is Activity -> context
@@ -325,10 +327,12 @@ fun VideoPlayerSection(
                             if (isEdgeGesture) {
                                 isGestureVisible = false
                                 gestureMode = VideoGestureMode.None
+                                dragStartX = -1f
                                 // 不需要 return，直接不执行下面的初始化逻辑即可
                             } else {
                                 isGestureVisible = true
                                 gestureMode = VideoGestureMode.None
+                                dragStartX = offset.x
                                 totalDragDistanceY = 0f
                                 totalDragDistanceX = 0f
 
@@ -370,10 +374,12 @@ fun VideoPlayerSection(
                             }
                             isGestureVisible = false
                             gestureMode = VideoGestureMode.None
+                            dragStartX = -1f
                         },
                         onDragCancel = {
                             isGestureVisible = false
                             gestureMode = VideoGestureMode.None
+                            dragStartX = -1f
                         },
                         //  [修复点] 使用 dragAmount 而不是 change.positionChange()
                         onDrag = { change, dragAmount ->
@@ -398,19 +404,24 @@ fun VideoPlayerSection(
                                 } else {
                                     // 根据起始 X 坐标判断区域 (左1/3=亮度, 右1/3=音量, 中间1/3=功能区)
                                     val width = size.width.toFloat()
-                                    val startX = change.position.x
-                                    val leftZoneEnd = width / 3f
-                                    val rightZoneStart = width * 2f / 3f
+                                    // 使用 onDragStart 锁定的起点 X，避免拖动中横向偏移导致误触
+                                    val startX = if (dragStartX >= 0f) dragStartX else change.position.x
+                                    // 分区边界增加缓冲，避免中间区域在边界附近被误判
+                                    val boundaryPadding = 24.dp.toPx()
+                                    val leftZoneEnd = (width / 3f - boundaryPadding).coerceAtLeast(0f)
+                                    val rightZoneStart = (width * 2f / 3f + boundaryPadding).coerceAtMost(width)
+                                    val isSwipeUp = totalDragDistanceY < -minDragThreshold
                                     
                                     gestureMode = if (!isFullscreen) {
-                                        // 竖屏模式优化
-                                        // 左侧 1/3: 亮度
-                                        // 右侧 1/3: 音量
-                                        // 中间 1/3: 上滑全屏
-                                        when {
-                                            startX < leftZoneEnd -> VideoGestureMode.Brightness
-                                            startX > rightZoneStart -> VideoGestureMode.Volume
-                                            else -> VideoGestureMode.SwipeToFullscreen
+                                        // 竖屏模式：上滑优先进入全屏，避免误触发亮度/音量浮层
+                                        if (isSwipeUp) {
+                                            VideoGestureMode.SwipeToFullscreen
+                                        } else {
+                                            when {
+                                                startX < leftZoneEnd -> VideoGestureMode.Brightness
+                                                startX > rightZoneStart -> VideoGestureMode.Volume
+                                                else -> VideoGestureMode.SwipeToFullscreen
+                                            }
                                         }
                                     } else {
                                         // 横屏模式
@@ -875,8 +886,14 @@ fun VideoPlayerSection(
             }
         }
 
-        // 🖼️ [修复] 手势指示器 - Seek 模式使用缩略图预览
-        if (isGestureVisible && !isInPipMode) {
+        // 🖼️ [修复] 手势指示器：仅在亮度/音量/Seek 模式显示，避免上滑全屏时误显示亮度图标
+        val shouldShowGestureIndicator = isGestureVisible &&
+            !isInPipMode &&
+            (gestureMode == VideoGestureMode.Seek ||
+                gestureMode == VideoGestureMode.Brightness ||
+                gestureMode == VideoGestureMode.Volume)
+
+        if (shouldShowGestureIndicator) {
             if (gestureMode == VideoGestureMode.Seek) {
                 // 🖼️ Seek 模式：显示带缩略图的预览气泡
                 Box(

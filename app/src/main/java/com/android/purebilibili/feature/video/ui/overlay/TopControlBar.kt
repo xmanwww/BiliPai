@@ -113,27 +113,18 @@ fun TopControlBar(
                 }
                 
                 Spacer(modifier = Modifier.width(16.dp))
-                
-                // Title & Info
-                Column(modifier = Modifier.weight(1f)) { // Allow text column to take remaining width within parent Row
-                    Text(
-                        text = title,
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee() // Marquee effect for long text
-                    )
-                    if (onlineCount.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = onlineCount,
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
-                }
+
+                // 标题与右侧图标保持同一行
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .weight(1f)
+                        .basicMarquee() // Marquee effect for long text
+                )
             }
             
             Spacer(modifier = Modifier.width(24.dp)) // Space between text and actions
@@ -196,6 +187,17 @@ fun TopControlBar(
                     )
                 }
             }
+        }
+
+        // 观看人数放到下一行，避免影响标题与右侧图标对齐
+        if (onlineCount.isNotEmpty()) {
+            Text(
+                text = onlineCount,
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                modifier = Modifier.padding(start = 48.dp, top = 2.dp)
+            )
         }
     }
 }

@@ -9,7 +9,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-5.1.1-fb7299?style=flat-square" alt="Version">
+  <sub>最后更新：2026-02-08 · 文档已同步至 v5.1.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-5.1.3-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -19,7 +23,7 @@
   <img src="https://img.shields.io/badge/Platform-Android%2010+-brightgreen?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/APK-14MB-orange?style=flat-square" alt="Size">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/Plugins-3%20Built--in-blueviolet?style=flat-square" alt="Plugins">
+  <img src="https://img.shields.io/badge/Plugins-4%20Built--in-blueviolet?style=flat-square" alt="Plugins">
 </p>
 
 <p align="center">
@@ -53,9 +57,12 @@
 | **AI 总结** | 🆕 智能生成视频内容摘要，快速获取核心信息 |
 | **原地播放** | 长按视频封面直接预览播放，点击即可全屏，无缝衔接 |
 | **后台播放** | 锁屏/切后台继续听，支持通知栏控制 |
+| **播放完成体验** | 关闭“自动播放下一个”后，播完不再弹强干扰操作弹窗 |
+| **评论体验** | 支持默认排序偏好（最热/最新），并修复特定排序下 UP 主/置顶评论缺失问题 |
+| **横屏信息栏** | 全屏顶部新增时间显示，横屏交互信息更完整 |
 | **播放记忆** | 自动记录观看进度，下次打开继续播放 |
 | **TV 登录** | 支持 TV 端扫码登录，解锁大会员专属高画质 |
-| **插件系统** | 内置空降助手、去广告、弹幕增强三大插件，可扩展架构 |
+| **插件系统** | 内置空降助手、去广告、弹幕增强、护眼模式四大插件，可扩展架构 |
 
 ### 🔌 插件系统
 
@@ -63,7 +70,7 @@
 |-----|-----|
 | **空降助手** | 基于 BilibiliSponsorBlock 数据库，自动跳过广告/恰饭片段 |
 | **去广告插件** | 智能过滤推荐流中的商业推广内容 |
-| **弹幕增强** | 关键词屏蔽与高亮，打造个性化弹幕体验 |
+| **弹幕增强** | 支持关键词 + 用户 UID/hash 过滤与高亮，规则变更支持播放内热更新 |
 | **夜间护眼** | 定时护眼、使用时长提醒、暖色滤镜 |
 | **插件中心** | 统一管理所有插件，支持独立配置 |
 | **🆕 外部插件** | 支持通过 URL 动态加载 JSON 规则插件 |
@@ -325,8 +332,8 @@ app/src/main/java/com/android/purebilibili/
 
 ## 🗺️ 路线图
 
-> [!NOTE]
-> 文档内容可能不会实时更新，部分功能可能在最新代码中已经实现。请以实际 App 体验为准。
+> [!TIP]
+> 路线图最后同步于 2026-02-08（v5.1.3）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -341,7 +348,8 @@ app/src/main/java/com/android/purebilibili/
 - [x] TV 扫码登录 (解锁高画质)
 - [x] 共享元素过渡动画
 - [x] 插件系统核心架构
-- [x] 内置插件 (空降助手 / 去广告 / 弹幕增强)
+- [x] 内置插件 (空降助手 / 去广告 / 弹幕增强 / 护眼模式)
+- [x] Firebase Analytics + Crashlytics（支持用户行为统计与崩溃追踪）
 
 ### 🚧 开发中
 
@@ -362,32 +370,17 @@ app/src/main/java/com/android/purebilibili/
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v5.1.1)
+### 最近更新 (v5.1.3 · 2026-02-08)
 
-- ✨ **系统优化**: 修复了一些问题，新增一些实验性功能
-- ⬆️ **版本迭代**: 升级至 v5.1.1
+- ✨ **搜索升级**：补齐搜索类型与交互流（视频 / UP / 番剧 / 直播），优化建议词与加载分页行为
+- ✨ **评论体验升级**：支持默认评论排序偏好，并修复特定排序下 UP 主/置顶评论无法显示的问题
+- ✨ **弹幕插件增强**：新增 UID/hash 级过滤能力，插件规则变更支持播放内热更新
+- 🛠 **播放器交互修复**：修复后台播放被错误暂停、手势误触亮度/音量、关闭自动连播后仍弹窗等问题
+- 🛠 **界面与数据追踪**：新增横屏顶部时间栏，强化 Firebase Analytics + Crashlytics 上报链路
 
-### 历史更新 (v5.1.0)
+### 历史版本
 
-- ✨ **性能优化**: 优化列表滚动性能，减少重组开销，保持顺滑体验
-- 🛠 **交互增强**: 优化卡片按压反馈动画，微调物理特性
-- 🐛 **修复**: 修复已知场景下的掉帧问题，优化布局计算
-
-### 历史更新 (v5.0.5)
-
-- ✨ **新功能**: 新增视频 AI 总结功能与视频 BGM 音乐识别查找
-- 🛠 **工程优化**: 移除对 `google-services.json` 的强制依赖，支持纯净编译
-- 📱 **平板适配**: 优化 Pad 端侧边栏交互与底部导航栏布局
-- 💬 **私信升级**: 完善私信列表分页加载，新增视频链接预览卡片
-- ✨ **视觉特效**: 新增"不感兴趣"粒子消散动画，优化顶部栏折叠效果
-- 🐛 **修复**: 修复已知崩溃与网络连接问题
-
-### 历史更新 (v5.0.4)
-
-- 🛠 **修复**: 修复视频加载时的黑屏问题，强制启用 HTTPS 加载资源
-- 🐛 **修复**: 修复竖屏模式下弹幕显示异常及自定义下载路径支持 (v4.2.4)
-- 💅 **优化**: 优化画中画模式体验及评论区表情包显示 (v4.2.3)
-- ✨ **新功能**: 新增官方启动图 (Splash Wallpaper) 与访客模式优化 (v4.2.0)
+- v5.1.1 / v5.1.0 / v5.0.5 / v5.0.4 变更详情请查看 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
