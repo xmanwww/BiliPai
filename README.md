@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-02-12 · 文档已同步至 v5.2.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-02-12 · 文档已同步至 v5.3.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-5.2.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-5.3.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -385,7 +385,7 @@ app/src/main/java/com/android/purebilibili/
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v5.2.3 · 2026-02-12)
+### 最近更新 (v5.3.0 · 2026-02-12)
 
 - ✨ **今日推荐单插件上线**：新增“今晚轻松看 / 深度学习看”双模式，支持本地推荐队列、UP 主榜与推荐理由展示
 - ✨ **推荐联动增强**：推荐算法接入护眼状态、负反馈信号与本地创作者画像，夜间优先短时长低刺激内容

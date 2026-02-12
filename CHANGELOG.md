@@ -1,6 +1,6 @@
 # Changelog
 
-## [5.2.3] - 2026-02-12
+## [5.3.0] - 2026-02-12
 
 ### ✨ New Features (新增功能)
 
@@ -49,7 +49,7 @@
 
 ### 📦 Release
 
-- **Version Bump**: Updated app version to `5.2.3`.
+- **Version Bump**: Updated app version to `5.3.0`.
 
 ## [5.2.2] - 2026-02-11
 
