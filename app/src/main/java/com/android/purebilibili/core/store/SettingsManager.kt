@@ -658,7 +658,7 @@ object SettingsManager {
     
     // ==========  弹幕设置 ==========
     
-    private const val DANMAKU_DEFAULTS_VERSION = 2
+    private const val DANMAKU_DEFAULTS_VERSION = 3
     private const val HOME_VISUAL_DEFAULTS_VERSION = 1
     private const val DEFAULT_DANMAKU_OPACITY = DANMAKU_DEFAULT_OPACITY
     private const val DEFAULT_DANMAKU_FONT_SCALE = 1.0f
@@ -670,6 +670,11 @@ object SettingsManager {
     private val KEY_DANMAKU_FONT_SCALE = floatPreferencesKey("danmaku_font_scale")
     private val KEY_DANMAKU_SPEED = floatPreferencesKey("danmaku_speed")
     private val KEY_DANMAKU_AREA = floatPreferencesKey("danmaku_area")
+    private val KEY_DANMAKU_ALLOW_SCROLL = booleanPreferencesKey("danmaku_allow_scroll")
+    private val KEY_DANMAKU_ALLOW_TOP = booleanPreferencesKey("danmaku_allow_top")
+    private val KEY_DANMAKU_ALLOW_BOTTOM = booleanPreferencesKey("danmaku_allow_bottom")
+    private val KEY_DANMAKU_ALLOW_COLORFUL = booleanPreferencesKey("danmaku_allow_colorful")
+    private val KEY_DANMAKU_ALLOW_SPECIAL = booleanPreferencesKey("danmaku_allow_special")
     private val KEY_DANMAKU_DEFAULTS_VERSION = intPreferencesKey("danmaku_defaults_version")
     private val KEY_HOME_VISUAL_DEFAULTS_VERSION = intPreferencesKey("home_visual_defaults_version")
     
@@ -722,6 +727,52 @@ object SettingsManager {
             preferences[KEY_DANMAKU_AREA] = value.coerceIn(0.25f, 1.0f)
         }
     }
+
+    // --- 弹幕类型过滤 (true=显示/不屏蔽) ---
+    fun getDanmakuAllowScroll(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_ALLOW_SCROLL] ?: true }
+
+    suspend fun setDanmakuAllowScroll(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_ALLOW_SCROLL] = value
+        }
+    }
+
+    fun getDanmakuAllowTop(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_ALLOW_TOP] ?: true }
+
+    suspend fun setDanmakuAllowTop(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_ALLOW_TOP] = value
+        }
+    }
+
+    fun getDanmakuAllowBottom(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_ALLOW_BOTTOM] ?: true }
+
+    suspend fun setDanmakuAllowBottom(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_ALLOW_BOTTOM] = value
+        }
+    }
+
+    fun getDanmakuAllowColorful(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_ALLOW_COLORFUL] ?: true }
+
+    suspend fun setDanmakuAllowColorful(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_ALLOW_COLORFUL] = value
+        }
+    }
+
+    fun getDanmakuAllowSpecial(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_ALLOW_SPECIAL] ?: true }
+
+    suspend fun setDanmakuAllowSpecial(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_ALLOW_SPECIAL] = value
+        }
+    }
     
     // --- 弹幕合并重复 (默认开启) ---
     private val KEY_DANMAKU_MERGE_DUPLICATES = booleanPreferencesKey("danmaku_merge_duplicates")
@@ -744,6 +795,11 @@ object SettingsManager {
                 preferences[KEY_DANMAKU_FONT_SCALE] = DEFAULT_DANMAKU_FONT_SCALE
                 preferences[KEY_DANMAKU_SPEED] = DEFAULT_DANMAKU_SPEED
                 preferences[KEY_DANMAKU_AREA] = DEFAULT_DANMAKU_AREA
+                preferences[KEY_DANMAKU_ALLOW_SCROLL] = true
+                preferences[KEY_DANMAKU_ALLOW_TOP] = true
+                preferences[KEY_DANMAKU_ALLOW_BOTTOM] = true
+                preferences[KEY_DANMAKU_ALLOW_COLORFUL] = true
+                preferences[KEY_DANMAKU_ALLOW_SPECIAL] = true
                 preferences[KEY_DANMAKU_DEFAULTS_VERSION] = DANMAKU_DEFAULTS_VERSION
             }
         }

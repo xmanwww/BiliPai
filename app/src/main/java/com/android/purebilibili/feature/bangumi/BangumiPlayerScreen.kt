@@ -148,15 +148,46 @@ fun BangumiPlayerScreen(
     val danmakuMergeDuplicates by com.android.purebilibili.core.store.SettingsManager
         .getDanmakuMergeDuplicates(context)
         .collectAsState(initial = true)
+    val danmakuAllowScroll by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuAllowScroll(context)
+        .collectAsState(initial = true)
+    val danmakuAllowTop by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuAllowTop(context)
+        .collectAsState(initial = true)
+    val danmakuAllowBottom by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuAllowBottom(context)
+        .collectAsState(initial = true)
+    val danmakuAllowColorful by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuAllowColorful(context)
+        .collectAsState(initial = true)
+    val danmakuAllowSpecial by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuAllowSpecial(context)
+        .collectAsState(initial = true)
     
     //  弹幕设置变化时实时应用到 DanmakuManager
-    LaunchedEffect(danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea, danmakuMergeDuplicates) {
+    LaunchedEffect(
+        danmakuOpacity,
+        danmakuFontScale,
+        danmakuSpeed,
+        danmakuDisplayArea,
+        danmakuMergeDuplicates,
+        danmakuAllowScroll,
+        danmakuAllowTop,
+        danmakuAllowBottom,
+        danmakuAllowColorful,
+        danmakuAllowSpecial
+    ) {
         danmakuManager.updateSettings(
             opacity = danmakuOpacity,
             fontScale = danmakuFontScale,
             speed = danmakuSpeed,
             displayArea = danmakuDisplayArea,
-            mergeDuplicates = danmakuMergeDuplicates
+            mergeDuplicates = danmakuMergeDuplicates,
+            allowScroll = danmakuAllowScroll,
+            allowTop = danmakuAllowTop,
+            allowBottom = danmakuAllowBottom,
+            allowColorful = danmakuAllowColorful,
+            allowSpecial = danmakuAllowSpecial
         )
     }
     

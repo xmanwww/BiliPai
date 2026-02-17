@@ -29,6 +29,7 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PhotoCamera
 import com.android.purebilibili.data.model.response.AiAudioInfo
 
 /**
@@ -83,6 +84,7 @@ fun VideoSettingsPanel(
     
     // 资源下载
     onSaveCover: () -> Unit = {},
+    onCaptureScreenshot: () -> Unit = {},
     onDownloadAudio: () -> Unit = {},
     
     // 关闭面板
@@ -183,7 +185,7 @@ fun VideoSettingsPanel(
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         // 保存封面
                         Button(
                             onClick = {
@@ -205,6 +207,30 @@ fun VideoSettingsPanel(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("保存封面", color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
+
+                        // 视频截图
+                        Button(
+                            onClick = {
+                                onCaptureScreenshot()
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PhotoCamera,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("视频截图", color = MaterialTheme.colorScheme.onSecondaryContainer)
                             }
                         }
                         

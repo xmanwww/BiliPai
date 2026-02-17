@@ -16,6 +16,7 @@ import android.content.ContextWrapper
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.KeyEvent
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -67,6 +68,7 @@ import com.android.purebilibili.core.util.shouldHandleTvBackKey
 import com.android.purebilibili.core.util.shouldHandleTvMenuKey
 import com.android.purebilibili.core.util.shouldHandleTvPlayPauseKey
 import com.android.purebilibili.core.util.shouldHandleTvSelectKey
+import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -233,6 +235,7 @@ fun VideoPlayerSection(
     // 控制器显示状态
     var showControls by remember { mutableStateOf(true) }
     val tvPlayerFocusRequester = tvFocusRequester ?: remember { FocusRequester() }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     
     // 🔒 [新增] 屏幕锁定状态（全屏时防误触）
     var isScreenLocked by remember { mutableStateOf(false) }
@@ -273,6 +276,10 @@ fun VideoPlayerSection(
     var scale by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
+
+    DisposableEffect(Unit) {
+        onDispose { playerViewRef = null }
+    }
 
     // [新增] 共享元素过渡支持
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
@@ -681,6 +688,54 @@ fun VideoPlayerSection(
         val danmakuDisplayArea by com.android.purebilibili.core.store.SettingsManager
             .getDanmakuArea(context)
             .collectAsState(initial = 0.5f)
+        val danmakuMergeDuplicates by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuMergeDuplicates(context)
+            .collectAsState(initial = true)
+        val danmakuAllowScroll by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuAllowScroll(context)
+            .collectAsState(initial = true)
+        val danmakuAllowTop by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuAllowTop(context)
+            .collectAsState(initial = true)
+        val danmakuAllowBottom by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuAllowBottom(context)
+            .collectAsState(initial = true)
+        val danmakuAllowColorful by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuAllowColorful(context)
+            .collectAsState(initial = true)
+        val danmakuAllowSpecial by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuAllowSpecial(context)
+            .collectAsState(initial = true)
+        val canSyncDanmakuCloud = (uiState as? PlayerUiState.Success)?.isLoggedIn == true
+        var pendingDanmakuCloudSync by remember {
+            mutableStateOf<com.android.purebilibili.data.repository.DanmakuCloudSyncSettings?>(null)
+        }
+
+        fun queueDanmakuCloudSync(
+            enabled: Boolean = danmakuEnabled,
+            allowScroll: Boolean = danmakuAllowScroll,
+            allowTop: Boolean = danmakuAllowTop,
+            allowBottom: Boolean = danmakuAllowBottom,
+            allowColorful: Boolean = danmakuAllowColorful,
+            allowSpecial: Boolean = danmakuAllowSpecial,
+            opacity: Float = danmakuOpacity,
+            displayAreaRatio: Float = danmakuDisplayArea,
+            speed: Float = danmakuSpeed,
+            fontScale: Float = danmakuFontScale
+        ) {
+            pendingDanmakuCloudSync = com.android.purebilibili.data.repository.DanmakuCloudSyncSettings(
+                enabled = enabled,
+                allowScroll = allowScroll,
+                allowTop = allowTop,
+                allowBottom = allowBottom,
+                allowColorful = allowColorful,
+                allowSpecial = allowSpecial,
+                opacity = opacity,
+                displayAreaRatio = displayAreaRatio,
+                speed = speed,
+                fontScale = fontScale
+            )
+        }
         
         //  当视频加载成功时加载弹幕（不再依赖 isFullscreen，单例会保持弹幕）
         val cid = (uiState as? PlayerUiState.Success)?.info?.cid ?: 0L
@@ -720,13 +775,46 @@ fun VideoPlayerSection(
         }
         
         //  弹幕设置变化时实时应用
-        LaunchedEffect(danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea) {
+        LaunchedEffect(
+            danmakuOpacity,
+            danmakuFontScale,
+            danmakuSpeed,
+            danmakuDisplayArea,
+            danmakuMergeDuplicates,
+            danmakuAllowScroll,
+            danmakuAllowTop,
+            danmakuAllowBottom,
+            danmakuAllowColorful,
+            danmakuAllowSpecial
+        ) {
             danmakuManager.updateSettings(
                 opacity = danmakuOpacity,
                 fontScale = danmakuFontScale,
                 speed = danmakuSpeed,
-                displayArea = danmakuDisplayArea
+                displayArea = danmakuDisplayArea,
+                mergeDuplicates = danmakuMergeDuplicates,
+                allowScroll = danmakuAllowScroll,
+                allowTop = danmakuAllowTop,
+                allowBottom = danmakuAllowBottom,
+                allowColorful = danmakuAllowColorful,
+                allowSpecial = danmakuAllowSpecial
             )
+        }
+
+        // 账号云同步：用户修改弹幕设置后防抖上云，避免滑杆拖动时高频请求
+        LaunchedEffect(pendingDanmakuCloudSync, canSyncDanmakuCloud) {
+            val settings = pendingDanmakuCloudSync ?: return@LaunchedEffect
+            if (!canSyncDanmakuCloud) return@LaunchedEffect
+
+            kotlinx.coroutines.delay(700)
+            val result = com.android.purebilibili.data.repository.DanmakuRepository
+                .syncDanmakuCloudConfig(settings)
+            if (result.isFailure) {
+                android.util.Log.w(
+                    "VideoPlayerSection",
+                    "Danmaku cloud sync failed: ${result.exceptionOrNull()?.message}"
+                )
+            }
         }
         
         //  绑定 Player（不在 onDispose 中释放，单例保持状态）
@@ -770,6 +858,7 @@ fun VideoPlayerSection(
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
+                        playerViewRef = this
                         player = if (isPortraitFullscreen) null else playerState.player
                         setKeepContentOnPlayerReset(true)
                         setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -780,6 +869,7 @@ fun VideoPlayerSection(
                     }
                 },
                 update = { playerView ->
+                    playerViewRef = playerView
                     playerView.player = if (isPortraitFullscreen) null else playerState.player
                     playerView.resizeMode = currentAspectRatio.resizeMode
                 },
@@ -1187,6 +1277,7 @@ fun VideoPlayerSection(
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager.setDanmakuEnabled(context, newState)
                     }
+                    queueDanmakuCloudSync(enabled = newState)
                     //  记录弹幕开关事件
                     com.android.purebilibili.core.util.AnalyticsHelper.logDanmakuToggle(newState)
                 },
@@ -1194,29 +1285,74 @@ fun VideoPlayerSection(
                 danmakuFontScale = danmakuFontScale,
                 danmakuSpeed = danmakuSpeed,
                 danmakuDisplayArea = danmakuDisplayArea,
+                danmakuMergeDuplicates = danmakuMergeDuplicates,
+                danmakuAllowScroll = danmakuAllowScroll,
+                danmakuAllowTop = danmakuAllowTop,
+                danmakuAllowBottom = danmakuAllowBottom,
+                danmakuAllowColorful = danmakuAllowColorful,
+                danmakuAllowSpecial = danmakuAllowSpecial,
                 onDanmakuOpacityChange = { value ->
                     danmakuManager.opacity = value
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager.setDanmakuOpacity(context, value)
                     }
+                    queueDanmakuCloudSync(opacity = value)
                 },
                 onDanmakuFontScaleChange = { value ->
                     danmakuManager.fontScale = value
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager.setDanmakuFontScale(context, value)
                     }
+                    queueDanmakuCloudSync(fontScale = value)
                 },
                 onDanmakuSpeedChange = { value ->
                     danmakuManager.speedFactor = value
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager.setDanmakuSpeed(context, value)
                     }
+                    queueDanmakuCloudSync(speed = value)
                 },
                 onDanmakuDisplayAreaChange = { value ->
                     danmakuManager.displayArea = value
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager.setDanmakuArea(context, value)
                     }
+                    queueDanmakuCloudSync(displayAreaRatio = value)
+                },
+                onDanmakuMergeDuplicatesChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuMergeDuplicates(context, value)
+                    }
+                },
+                onDanmakuAllowScrollChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuAllowScroll(context, value)
+                    }
+                    queueDanmakuCloudSync(allowScroll = value)
+                },
+                onDanmakuAllowTopChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuAllowTop(context, value)
+                    }
+                    queueDanmakuCloudSync(allowTop = value)
+                },
+                onDanmakuAllowBottomChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuAllowBottom(context, value)
+                    }
+                    queueDanmakuCloudSync(allowBottom = value)
+                },
+                onDanmakuAllowColorfulChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuAllowColorful(context, value)
+                    }
+                    queueDanmakuCloudSync(allowColorful = value)
+                },
+                onDanmakuAllowSpecialChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuAllowSpecial(context, value)
+                    }
+                    queueDanmakuCloudSync(allowSpecial = value)
                 },
                 //  视频比例调节
 
@@ -1288,6 +1424,27 @@ fun VideoPlayerSection(
                 onlineCount = uiState.onlineCount,
                 // [New]
                 onSaveCover = onSaveCover,
+                onCaptureScreenshot = {
+                    val playerView = playerViewRef
+                    if (playerView == null) {
+                        Toast.makeText(context, "截图失败：播放器未就绪", Toast.LENGTH_SHORT).show()
+                    } else {
+                        scope.launch {
+                            val success = captureAndSaveVideoScreenshot(
+                                context = context,
+                                playerView = playerView,
+                                videoWidth = videoSizeState.first,
+                                videoHeight = videoSizeState.second,
+                                videoTitle = uiState.info.title,
+                            )
+                            Toast.makeText(
+                                context,
+                                if (success) "截图已保存到相册（PNG）" else "截图失败，请稍后重试",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                },
                 onDownloadAudio = onDownloadAudio,
                 // 🔁 [新增] 播放模式
                 currentPlayMode = currentPlayMode,

@@ -50,11 +50,21 @@ fun DanmakuSettingsPanel(
     speed: Float,
     displayArea: Float = 0.5f,
     mergeDuplicates: Boolean = true,
+    allowScroll: Boolean = true,
+    allowTop: Boolean = true,
+    allowBottom: Boolean = true,
+    allowColorful: Boolean = true,
+    allowSpecial: Boolean = true,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onDisplayAreaChange: (Float) -> Unit = {},
     onMergeDuplicatesChange: (Boolean) -> Unit = {},
+    onAllowScrollChange: (Boolean) -> Unit = {},
+    onAllowTopChange: (Boolean) -> Unit = {},
+    onAllowBottomChange: (Boolean) -> Unit = {},
+    onAllowColorfulChange: (Boolean) -> Unit = {},
+    onAllowSpecialChange: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     // 使用 Box + 手势检测来实现：点击面板外部关闭，面板内部正常交互
@@ -211,7 +221,96 @@ fun DanmakuSettingsPanel(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = CardBackground,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "屏蔽类型",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "关闭对应开关即可屏蔽",
+                            color = Color.White.copy(0.5f),
+                            fontSize = 11.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        DanmakuFilterSwitchRow(
+                            label = "滚动弹幕",
+                            checked = allowScroll,
+                            onCheckedChange = onAllowScrollChange
+                        )
+                        DanmakuFilterSwitchRow(
+                            label = "顶部弹幕",
+                            checked = allowTop,
+                            onCheckedChange = onAllowTopChange
+                        )
+                        DanmakuFilterSwitchRow(
+                            label = "底部弹幕",
+                            checked = allowBottom,
+                            onCheckedChange = onAllowBottomChange
+                        )
+                        DanmakuFilterSwitchRow(
+                            label = "彩色弹幕",
+                            checked = allowColorful,
+                            onCheckedChange = onAllowColorfulChange
+                        )
+                        DanmakuFilterSwitchRow(
+                            label = "高级弹幕",
+                            checked = allowSpecial,
+                            onCheckedChange = onAllowSpecialChange,
+                            showDivider = false
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun DanmakuFilterSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    showDivider: Boolean = true
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCheckedChange(!checked) }
+                .padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                color = Color.White,
+                fontSize = 14.sp
+            )
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    uncheckedThumbColor = Color.White,
+                    uncheckedTrackColor = Color.White.copy(0.1f)
+                )
+            )
+        }
+        if (showDivider) {
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
         }
     }
 }

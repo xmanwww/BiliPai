@@ -71,3 +71,10 @@ TMessagesProj/
 
 # Backup directory
 BiliPai_BusinessCode_Backup/
+
+# Docs / plans should not be pushed
+docs/
+**/docs/
+*.md
+!README.md
+!AGENTS.md

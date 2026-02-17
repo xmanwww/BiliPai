@@ -366,6 +366,21 @@ fun FullscreenPlayerOverlay(
         val danmakuMergeDuplicates by SettingsManager
             .getDanmakuMergeDuplicates(context)
             .collectAsState(initial = true)
+        val danmakuAllowScroll by SettingsManager
+            .getDanmakuAllowScroll(context)
+            .collectAsState(initial = true)
+        val danmakuAllowTop by SettingsManager
+            .getDanmakuAllowTop(context)
+            .collectAsState(initial = true)
+        val danmakuAllowBottom by SettingsManager
+            .getDanmakuAllowBottom(context)
+            .collectAsState(initial = true)
+        val danmakuAllowColorful by SettingsManager
+            .getDanmakuAllowColorful(context)
+            .collectAsState(initial = true)
+        val danmakuAllowSpecial by SettingsManager
+            .getDanmakuAllowSpecial(context)
+            .collectAsState(initial = true)
         
         //  获取当前 cid 并加载弹幕
         val currentCid = miniPlayerManager.currentCid
@@ -389,13 +404,29 @@ fun FullscreenPlayerOverlay(
         }
         
         //  弹幕设置变化时实时应用
-        LaunchedEffect(danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea, danmakuMergeDuplicates) {
+        LaunchedEffect(
+            danmakuOpacity,
+            danmakuFontScale,
+            danmakuSpeed,
+            danmakuDisplayArea,
+            danmakuMergeDuplicates,
+            danmakuAllowScroll,
+            danmakuAllowTop,
+            danmakuAllowBottom,
+            danmakuAllowColorful,
+            danmakuAllowSpecial
+        ) {
             danmakuManager.updateSettings(
                 opacity = danmakuOpacity,
                 fontScale = danmakuFontScale,
                 speed = danmakuSpeed,
                 displayArea = danmakuDisplayArea,
-                mergeDuplicates = danmakuMergeDuplicates
+                mergeDuplicates = danmakuMergeDuplicates,
+                allowScroll = danmakuAllowScroll,
+                allowTop = danmakuAllowTop,
+                allowBottom = danmakuAllowBottom,
+                allowColorful = danmakuAllowColorful,
+                allowSpecial = danmakuAllowSpecial
             )
         }
         
@@ -664,6 +695,11 @@ fun FullscreenPlayerOverlay(
             var localSpeed by remember(danmakuSpeed) { mutableFloatStateOf(danmakuSpeed) }
             var localDisplayArea by remember(danmakuDisplayArea) { mutableFloatStateOf(danmakuDisplayArea) }
             var localMergeDuplicates by remember(danmakuMergeDuplicates) { mutableStateOf(danmakuMergeDuplicates) }
+            var localAllowScroll by remember(danmakuAllowScroll) { mutableStateOf(danmakuAllowScroll) }
+            var localAllowTop by remember(danmakuAllowTop) { mutableStateOf(danmakuAllowTop) }
+            var localAllowBottom by remember(danmakuAllowBottom) { mutableStateOf(danmakuAllowBottom) }
+            var localAllowColorful by remember(danmakuAllowColorful) { mutableStateOf(danmakuAllowColorful) }
+            var localAllowSpecial by remember(danmakuAllowSpecial) { mutableStateOf(danmakuAllowSpecial) }
             
             DanmakuSettingsPanel(
                 opacity = localOpacity,
@@ -671,6 +707,11 @@ fun FullscreenPlayerOverlay(
                 speed = localSpeed,
                 displayArea = localDisplayArea,
                 mergeDuplicates = localMergeDuplicates,
+                allowScroll = localAllowScroll,
+                allowTop = localAllowTop,
+                allowBottom = localAllowBottom,
+                allowColorful = localAllowColorful,
+                allowSpecial = localAllowSpecial,
                 onOpacityChange = { 
                     localOpacity = it
                     danmakuManager.opacity = it
@@ -696,6 +737,26 @@ fun FullscreenPlayerOverlay(
                     // 需要在 Manager 中添加临时变量或直接持久化
                     // 对于 Switch 这种立即生效的 Prefernce，直接存就行
                     scope.launch { SettingsManager.setDanmakuMergeDuplicates(context, it) }
+                },
+                onAllowScrollChange = {
+                    localAllowScroll = it
+                    scope.launch { SettingsManager.setDanmakuAllowScroll(context, it) }
+                },
+                onAllowTopChange = {
+                    localAllowTop = it
+                    scope.launch { SettingsManager.setDanmakuAllowTop(context, it) }
+                },
+                onAllowBottomChange = {
+                    localAllowBottom = it
+                    scope.launch { SettingsManager.setDanmakuAllowBottom(context, it) }
+                },
+                onAllowColorfulChange = {
+                    localAllowColorful = it
+                    scope.launch { SettingsManager.setDanmakuAllowColorful(context, it) }
+                },
+                onAllowSpecialChange = {
+                    localAllowSpecial = it
+                    scope.launch { SettingsManager.setDanmakuAllowSpecial(context, it) }
                 },
                 onDismiss = { showDanmakuSettings = false }
             )

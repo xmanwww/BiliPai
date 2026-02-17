@@ -36,16 +36,17 @@ android {
             useSupportLibrary = true
         }
 
-        // 👇👇👇 核心修复：指定打包的 CPU 架构 👇👇👇
+        // 👇👇👇 指定打包的 CPU 架构（64 位 + 32 位）👇👇👇
         ndk {
-            // arm64-v8a: 现代 64 位真机 (Pixel、三星、小米等)
-            abiFilters += listOf("arm64-v8a")
+            // arm64-v8a: 现代 64 位真机
+            // armeabi-v7a: 兼容 32 位设备/盒子
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
 
         manifestPlaceholders["castServiceProcess"] = castServiceProcess
     }
     
-    // 🔥 ABI 分包 - 暂时禁用，只生成 64 位 APK
+    // 🔥 ABI 分包 - 暂时禁用，生成包含多 ABI 的通用 APK
     splits {
         abi {
             isEnable = false
@@ -123,9 +124,10 @@ android {
     // 🔥 自定义 APK 输出文件名
     applicationVariants.configureEach {
         val variant = this
+        val abiLabel = "64bit+32bit-arm64-v8a+armeabi-v7a"
         outputs.configureEach {
             val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
-            output.outputFileName = "BiliPai-${variant.versionName}.apk"
+            output.outputFileName = "BiliPai-${variant.versionName}-${abiLabel}.apk"
         }
     }
 }

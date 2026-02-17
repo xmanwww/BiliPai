@@ -135,11 +135,21 @@ fun VideoPlayerOverlay(
     danmakuSpeed: Float = 1.0f,
     danmakuDisplayArea: Float = 0.5f,
     danmakuMergeDuplicates: Boolean = true,
+    danmakuAllowScroll: Boolean = true,
+    danmakuAllowTop: Boolean = true,
+    danmakuAllowBottom: Boolean = true,
+    danmakuAllowColorful: Boolean = true,
+    danmakuAllowSpecial: Boolean = true,
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
     onDanmakuDisplayAreaChange: (Float) -> Unit = {},
     onDanmakuMergeDuplicatesChange: (Boolean) -> Unit = {},
+    onDanmakuAllowScrollChange: (Boolean) -> Unit = {},
+    onDanmakuAllowTopChange: (Boolean) -> Unit = {},
+    onDanmakuAllowBottomChange: (Boolean) -> Unit = {},
+    onDanmakuAllowColorfulChange: (Boolean) -> Unit = {},
+    onDanmakuAllowSpecialChange: (Boolean) -> Unit = {},
     //  [实验性功能] 双击点赞
     doubleTapLikeEnabled: Boolean = true,
     onDoubleTapLike: () -> Unit = {},
@@ -193,6 +203,7 @@ fun VideoPlayerOverlay(
     onlineCount: String = "",
     // [New Actions]
     onSaveCover: () -> Unit = {},
+    onCaptureScreenshot: () -> Unit = {},
     onDownloadAudio: () -> Unit = {},
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
@@ -759,11 +770,21 @@ fun VideoPlayerOverlay(
                 speed = danmakuSpeed,
                 displayArea = danmakuDisplayArea,
                 mergeDuplicates = danmakuMergeDuplicates,
+                allowScroll = danmakuAllowScroll,
+                allowTop = danmakuAllowTop,
+                allowBottom = danmakuAllowBottom,
+                allowColorful = danmakuAllowColorful,
+                allowSpecial = danmakuAllowSpecial,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
                 onSpeedChange = onDanmakuSpeedChange,
                 onDisplayAreaChange = onDanmakuDisplayAreaChange,
                 onMergeDuplicatesChange = onDanmakuMergeDuplicatesChange,
+                onAllowScrollChange = onDanmakuAllowScrollChange,
+                onAllowTopChange = onDanmakuAllowTopChange,
+                onAllowBottomChange = onDanmakuAllowBottomChange,
+                onAllowColorfulChange = onDanmakuAllowColorfulChange,
+                onAllowSpecialChange = onDanmakuAllowSpecialChange,
                 onDismiss = { showDanmakuSettings = false }
             )
         }
@@ -825,6 +846,9 @@ fun VideoPlayerOverlay(
                     // Disimss moved to VideoSettingsPanel internal or caller responsibility?
                     // VideoSettingsPanel calls onSaveCover then onDismiss.
                     // We just invoke the callback.
+                },
+                onCaptureScreenshot = {
+                    onCaptureScreenshot()
                 },
                 onDownloadAudio = {
                     onDownloadAudio()
