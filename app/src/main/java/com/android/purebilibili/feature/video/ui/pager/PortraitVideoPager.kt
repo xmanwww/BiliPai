@@ -128,6 +128,21 @@ fun PortraitVideoPager(
     val danmakuMergeDuplicates by SettingsManager
         .getDanmakuMergeDuplicates(context)
         .collectAsState(initial = true)
+    val danmakuAllowScroll by SettingsManager
+        .getDanmakuAllowScroll(context)
+        .collectAsState(initial = true)
+    val danmakuAllowTop by SettingsManager
+        .getDanmakuAllowTop(context)
+        .collectAsState(initial = true)
+    val danmakuAllowBottom by SettingsManager
+        .getDanmakuAllowBottom(context)
+        .collectAsState(initial = true)
+    val danmakuAllowColorful by SettingsManager
+        .getDanmakuAllowColorful(context)
+        .collectAsState(initial = true)
+    val danmakuAllowSpecial by SettingsManager
+        .getDanmakuAllowSpecial(context)
+        .collectAsState(initial = true)
     val autoPlayEnabled by SettingsManager
         .getAutoPlay(context)
         .collectAsState(initial = true)
@@ -517,13 +532,29 @@ fun PortraitVideoPager(
         }
     }
 
-    LaunchedEffect(danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea, danmakuMergeDuplicates) {
+    LaunchedEffect(
+        danmakuOpacity,
+        danmakuFontScale,
+        danmakuSpeed,
+        danmakuDisplayArea,
+        danmakuMergeDuplicates,
+        danmakuAllowScroll,
+        danmakuAllowTop,
+        danmakuAllowBottom,
+        danmakuAllowColorful,
+        danmakuAllowSpecial
+    ) {
         danmakuManager.updateSettings(
             opacity = danmakuOpacity,
             fontScale = danmakuFontScale,
             speed = danmakuSpeed,
             displayArea = danmakuDisplayArea,
-            mergeDuplicates = danmakuMergeDuplicates
+            mergeDuplicates = danmakuMergeDuplicates,
+            allowScroll = danmakuAllowScroll,
+            allowTop = danmakuAllowTop,
+            allowBottom = danmakuAllowBottom,
+            allowColorful = danmakuAllowColorful,
+            allowSpecial = danmakuAllowSpecial
         )
     }
 

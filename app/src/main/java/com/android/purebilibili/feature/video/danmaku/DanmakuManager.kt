@@ -159,6 +159,41 @@ class DanmakuManager private constructor(
             applyConfigToController("displayArea")
         }
 
+    var allowScrollDanmaku: Boolean
+        get() = config.allowScroll
+        set(value) {
+            config.allowScroll = value
+            applyConfigToController("filter_changed")
+        }
+
+    var allowTopDanmaku: Boolean
+        get() = config.allowTop
+        set(value) {
+            config.allowTop = value
+            applyConfigToController("filter_changed")
+        }
+
+    var allowBottomDanmaku: Boolean
+        get() = config.allowBottom
+        set(value) {
+            config.allowBottom = value
+            applyConfigToController("filter_changed")
+        }
+
+    var allowColorfulDanmaku: Boolean
+        get() = config.allowColorful
+        set(value) {
+            config.allowColorful = value
+            applyConfigToController("filter_changed")
+        }
+
+    var allowSpecialDanmaku: Boolean
+        get() = config.allowSpecial
+        set(value) {
+            config.allowSpecial = value
+            applyConfigToController("filter_changed")
+        }
+
     private fun updateScopeInternal(newScope: CoroutineScope) {
         if (scope === newScope) return
         scope = newScope
@@ -190,8 +225,10 @@ class DanmakuManager private constructor(
         val sourceStandard = sourceDanmakuList ?: return false
         val sourceAdvanced = sourceAdvancedDanmakuList ?: emptyList()
 
-        val (filteredStandardList, filteredAdvancedList) =
+        val (pluginFilteredStandardList, pluginFilteredAdvancedList) =
             applyDanmakuPluginPipeline(sourceStandard, sourceAdvanced)
+        val (filteredStandardList, filteredAdvancedList) =
+            applyDanmakuTypeFilters(pluginFilteredStandardList, pluginFilteredAdvancedList)
 
         if (filteredStandardList.isEmpty() && filteredAdvancedList.isEmpty()) {
             cachedDanmakuList = emptyList()
@@ -339,6 +376,62 @@ class DanmakuManager private constructor(
         return Pair(filteredStandard, filteredAdvanced)
     }
 
+    private fun currentTypeFilterSettings(): DanmakuTypeFilterSettings {
+        return DanmakuTypeFilterSettings(
+            allowScroll = config.allowScroll,
+            allowTop = config.allowTop,
+            allowBottom = config.allowBottom,
+            allowColorful = config.allowColorful,
+            allowSpecial = config.allowSpecial
+        )
+    }
+
+    private fun applyDanmakuTypeFilters(
+        standardDanmakuList: List<DanmakuData>,
+        advancedDanmakuList: List<AdvancedDanmakuData>
+    ): Pair<List<DanmakuData>, List<AdvancedDanmakuData>> {
+        val settings = currentTypeFilterSettings()
+        if (settings.allowScroll && settings.allowTop && settings.allowBottom && settings.allowColorful && settings.allowSpecial) {
+            return Pair(standardDanmakuList, advancedDanmakuList)
+        }
+
+        var filteredStandardCount = 0
+        val filteredStandard = standardDanmakuList.filter { data ->
+            val textData = data as? TextData ?: return@filter true
+            val danmakuType = mapLayerTypeToDanmakuType(textData.layerType)
+            val color = textData.textColor ?: 0x00FFFFFF
+            val visible = shouldDisplayStandardDanmaku(
+                danmakuType = danmakuType,
+                color = color,
+                settings = settings
+            )
+            if (!visible) {
+                filteredStandardCount++
+            }
+            visible
+        }
+
+        var filteredAdvancedCount = 0
+        val filteredAdvanced = advancedDanmakuList.filter { data ->
+            val visible = shouldDisplayAdvancedDanmaku(
+                color = data.color,
+                settings = settings
+            )
+            if (!visible) {
+                filteredAdvancedCount++
+            }
+            visible
+        }
+
+        if (filteredStandardCount > 0 || filteredAdvancedCount > 0) {
+            Log.w(
+                TAG,
+                " Danmaku type filter applied: standard -$filteredStandardCount, advanced -$filteredAdvancedCount"
+            )
+        }
+        return Pair(filteredStandard, filteredAdvanced)
+    }
+
     private fun TextData.toPluginItem(): DanmakuItem {
         val weighted = this as? WeightedTextData
         val currentColor = textColor ?: 0xFFFFFF
@@ -465,18 +558,35 @@ class DanmakuManager private constructor(
         fontScale: Float = this.fontScale,
         speed: Float = this.speedFactor,
         displayArea: Float = this.displayArea,
-        mergeDuplicates: Boolean = config.mergeDuplicates
+        mergeDuplicates: Boolean = config.mergeDuplicates,
+        allowScroll: Boolean = config.allowScroll,
+        allowTop: Boolean = config.allowTop,
+        allowBottom: Boolean = config.allowBottom,
+        allowColorful: Boolean = config.allowColorful,
+        allowSpecial: Boolean = config.allowSpecial
     ) {
         val mergeChanged = config.mergeDuplicates != mergeDuplicates
+        val filterChanged =
+            config.allowScroll != allowScroll ||
+                config.allowTop != allowTop ||
+                config.allowBottom != allowBottom ||
+                config.allowColorful != allowColorful ||
+                config.allowSpecial != allowSpecial
         
         config.opacity = opacity
         config.fontScale = fontScale
         config.speedFactor = speed
         config.displayAreaRatio = displayArea
         config.mergeDuplicates = mergeDuplicates
+        config.allowScroll = allowScroll
+        config.allowTop = allowTop
+        config.allowBottom = allowBottom
+        config.allowColorful = allowColorful
+        config.allowSpecial = allowSpecial
         
-        if (mergeChanged) {
-            applyConfigToController("merge_changed")
+        if (mergeChanged || filterChanged) {
+            val reason = if (mergeChanged) "merge_changed" else "filter_changed"
+            applyConfigToController(reason)
         } else {
             applyConfigToController("batch")
         }
@@ -501,10 +611,10 @@ class DanmakuManager private constructor(
 
             //  [关键修复] fontScale/displayArea/viewHeight 改变时，需要重新设置弹幕数据
             // 因为引擎的 config.text.size 只对新弹幕生效，已显示的弹幕不会更新
-            if (reason == "fontScale" || reason == "displayArea" || reason == "batch" || reason == "resize" || reason == "merge_changed") {
+            if (reason == "fontScale" || reason == "displayArea" || reason == "batch" || reason == "resize" || reason == "merge_changed" || reason == "filter_changed") {
                 // 如果是合并状态改变，需要重新计算 cachedList
-                if (reason == "merge_changed") {
-                    rebuildDanmakuCacheFromSource("merge_changed")
+                if (reason == "merge_changed" || reason == "filter_changed") {
+                    rebuildDanmakuCacheFromSource(reason)
                 }
             
                 cachedDanmakuList?.let { list ->
@@ -524,6 +634,8 @@ class DanmakuManager private constructor(
                 TAG,
                 " Config applied ($reason): opacity=${config.opacity}, fontScale=${config.fontScale}, " +
                     "speed=${config.speedFactor}, area=${config.displayAreaRatio}, " +
+                    "allowScroll=${config.allowScroll}, allowTop=${config.allowTop}, allowBottom=${config.allowBottom}, " +
+                    "allowColorful=${config.allowColorful}, allowSpecial=${config.allowSpecial}, " +
                     "baseMoveTime=$originalMoveTime, videoSpeed=$currentVideoSpeed, " +
                     "moveTime=${ctrl.config.scroll.moveTime}"
             )

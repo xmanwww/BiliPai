@@ -33,6 +33,13 @@ class DanmakuConfig {
     
     // [新增] 合并重复弹幕
     var mergeDuplicates = true
+
+    // [新增] 类型屏蔽（与 B 站 blockxxx 语义对齐，true=显示/不屏蔽）
+    var allowScroll = true
+    var allowTop = true
+    var allowBottom = true
+    var allowColorful = true
+    var allowSpecial = true
     
     // 顶部边距（像素）
     var topMarginPx = 0
