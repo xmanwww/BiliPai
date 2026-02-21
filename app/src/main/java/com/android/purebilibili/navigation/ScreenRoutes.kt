@@ -43,7 +43,12 @@ sealed class ScreenRoutes(val route: String) {
     object AppearanceSettings : ScreenRoutes("appearance_settings")
     object PlaybackSettings : ScreenRoutes("playback_settings")
     object PermissionSettings : ScreenRoutes("permission_settings")  //  权限管理
-    object PluginsSettings : ScreenRoutes("plugins_settings")  //  插件中心
+    object PluginsSettings : ScreenRoutes("plugins_settings?importUrl={importUrl}") {  //  插件中心
+        fun createRoute(importUrl: String? = null): String {
+            if (importUrl.isNullOrBlank()) return "plugins_settings"
+            return "plugins_settings?importUrl=${android.net.Uri.encode(importUrl)}"
+        }
+    }
     object BottomBarSettings : ScreenRoutes("bottom_bar_settings")  //  底栏管理
     object TipsSettings : ScreenRoutes("tips_settings") // [Feature] 小贴士 & 隐藏操作
     //  [新增] 更多外观设置子页面

@@ -20,6 +20,9 @@ import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
+import com.android.purebilibili.core.store.normalizeAppIconKey
+import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
 import com.android.purebilibili.core.util.AnalyticsHelper
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.Logger
@@ -314,41 +317,12 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                 val compatAlias = android.content.ComponentName(packageName, "${packageName}.MainActivityAlias3D")
                 
                 // 读取用户保存的图标偏好
-                val currentIcon = SettingsManager.getAppIcon(this@PureApplication).first()
-                
-                // alias 映射 - 必须与 AndroidManifest.xml 中声明的完全一致
-                val allAliases = listOf(
-                    // 默认系列
-                    "default" to "${packageName}.MainActivityAlias3DLauncher", // 兼容旧键名，统一指向默认 3D
-                    "icon_3d" to "${packageName}.MainActivityAlias3DLauncher",
-                    "icon_blue" to "${packageName}.MainActivityAliasBlue",
-                    "icon_neon" to "${packageName}.MainActivityAliasNeon",
-                    "icon_retro" to "${packageName}.MainActivityAliasRetro",
-                    // 特色系列
-                    "icon_anime" to "${packageName}.MainActivityAliasAnime",
-                    "icon_flat" to "${packageName}.MainActivityAliasFlat",
-                    "icon_telegram_blue" to "${packageName}.MainActivityAliasTelegramBlue",
-                    "icon_telegram_green" to "${packageName}.MainActivityAliasGreen",
-                    "icon_telegram_pink" to "${packageName}.MainActivityAliasPink",
-                    "icon_telegram_purple" to "${packageName}.MainActivityAliasPurple",
-                    "icon_telegram_dark" to "${packageName}.MainActivityAliasDark",
-                    
-                    // 兼容旧键名 (向后兼容)
-                    "Yuki" to "${packageName}.MainActivityAliasYuki",
-                    "Anime" to "${packageName}.MainActivityAliasAnime",
-                    "Headphone" to "${packageName}.MainActivityAliasHeadphone",
-                    "3D" to "${packageName}.MainActivityAlias3DLauncher",
-                    "Blue" to "${packageName}.MainActivityAliasBlue",
-                    "Retro" to "${packageName}.MainActivityAliasRetro",
-                    "Flat" to "${packageName}.MainActivityAliasFlat",
-                    "Neon" to "${packageName}.MainActivityAliasNeon"
+                val currentIcon = normalizeAppIconKey(
+                    SettingsManager.getAppIcon(this@PureApplication).first()
                 )
-                val allUniqueAliases = allAliases.map { it.second }.distinct()
-                
-                //  [重装检测] 检查目标alias是否可用
-                // 找到需要启用的 alias
-                val targetAlias = allAliases.find { it.first == currentIcon }?.second
-                    ?: "${packageName}.MainActivityAlias3DLauncher" // 默认改用 3D 图标
+
+                val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
+                val targetAlias = resolveAppIconLauncherAlias(packageName, currentIcon)
                 
                 val targetAliasComponent = android.content.ComponentName(packageName, targetAlias)
                 val targetState = pm.getComponentEnabledSetting(targetAliasComponent)

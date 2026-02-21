@@ -180,6 +180,8 @@ fun VideoDetailScreen(
     val showFavoriteFolderDialog by viewModel.favoriteFolderDialogVisible.collectAsState()
     val favoriteFolders by viewModel.favoriteFolders.collectAsState()
     val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsState()
+    val selectedFavoriteFolderIds by viewModel.favoriteSelectedFolderIds.collectAsState()
+    val isSavingFavoriteFolders by viewModel.isSavingFavoriteFolders.collectAsState()
     
     // [Blur] Haze State
     val hazeState = remember { HazeState() }
@@ -1395,7 +1397,10 @@ fun VideoDetailScreen(
                                                         favoriteFolders = favoriteFolders,
                                                         isFavoriteFoldersLoading = isFavoriteFoldersLoading,
                                                         onFavoriteLongClick = { viewModel.showFavoriteFolderDialog() },
-                                                        onFavoriteFolderClick = { folder -> viewModel.addToFavoriteFolder(folder) },
+                                                        selectedFavoriteFolderIds = selectedFavoriteFolderIds,
+                                                        isSavingFavoriteFolders = isSavingFavoriteFolders,
+                                                        onFavoriteFolderToggle = { folder -> viewModel.toggleFavoriteFolderSelection(folder.id) },
+                                                        onSaveFavoriteFolders = { viewModel.saveFavoriteFolderSelection() },
                                                         onDismissFavoriteFolderDialog = { viewModel.dismissFavoriteFolderDialog() },
                                                         onCreateFavoriteFolder = { title, intro, isPrivate -> 
                                                             viewModel.createFavoriteFolder(title, intro, isPrivate) 
@@ -1418,7 +1423,7 @@ fun VideoDetailScreen(
                                                             isFavorited = success.isFavorited,
                                                             isCoined = success.coinCount > 0,
                                                             onLikeClick = { viewModel.toggleLike() },
-                                                            onFavoriteClick = { viewModel.toggleFavorite() },
+                                                            onFavoriteClick = { viewModel.showFavoriteFolderDialog() },
                                                             onCoinClick = { viewModel.openCoinDialog() },
                                                             onShareClick = {
                                                                 val shareText = "【${success.info.title}】\nhttps://www.bilibili.com/video/${success.info.bvid}"
@@ -2002,9 +2007,10 @@ fun VideoDetailScreen(
             com.android.purebilibili.feature.video.ui.components.FavoriteFolderSheet(
                 folders = favoriteFolders,
                 isLoading = isFavoriteFoldersLoading,
-                onFolderClick = { folder -> 
-                    viewModel.addToFavoriteFolder(folder)
-                },
+                selectedFolderIds = selectedFavoriteFolderIds,
+                isSaving = isSavingFavoriteFolders,
+                onFolderToggle = { folder -> viewModel.toggleFavoriteFolderSelection(folder.id) },
+                onSaveClick = { viewModel.saveFavoriteFolderSelection() },
                 onDismissRequest = { viewModel.dismissFavoriteFolderDialog() },
                 onCreateFolder = { title, intro, isPrivate ->
                     viewModel.createFavoriteFolder(title, intro, isPrivate)
@@ -2150,7 +2156,7 @@ internal fun shouldShowVideoDetailBottomInteractionBar(): Boolean {
 }
 
 internal fun shouldShowVideoDetailActionButtons(): Boolean {
-    return false
+    return true
 }
 
 internal data class RefreshModeCandidate(

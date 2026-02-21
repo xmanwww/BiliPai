@@ -60,7 +60,8 @@ fun getIconGroups(): List<IconGroup> {
             icons = listOf(
                 IconOption("icon_3d", "3D立体", "全新3D设计", R.mipmap.ic_launcher_3d_foreground),
                 IconOption("Yuki", "比心少女", "经典二次元", R.mipmap.ic_launcher_round),
-                IconOption("icon_anime", "蓝发电视", "bilibili风格", R.mipmap.ic_launcher_anime)
+                IconOption("icon_anime", "蓝发电视", "bilibili风格", R.mipmap.ic_launcher_anime),
+                IconOption("Headphone", "耳机少女", "经典头像", R.mipmap.ic_launcher_headphone)
             )
         ),
         IconGroup(
@@ -70,6 +71,7 @@ fun getIconGroups(): List<IconGroup> {
                 IconOption("icon_retro", "复古", "怀旧电视", R.mipmap.ic_launcher_retro_round),
                 IconOption("icon_neon", "霓虹", "赛博朋克", R.mipmap.ic_launcher_neon_round),
                 IconOption("icon_flat", "扁平", "现代极简", R.mipmap.ic_launcher_flat_round),
+                IconOption("icon_flat_material", "扁平材质", "细节质感", R.mipmap.ic_launcher_flat_material_round),
             )
         ),
         IconGroup(
@@ -280,4 +282,3 @@ fun IconSettingsContent(
             }
         }
     }
-

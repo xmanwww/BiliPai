@@ -654,6 +654,12 @@ fun VideoPlayerSection(
         val danmakuSmartOcclusion by com.android.purebilibili.core.store.SettingsManager
             .getDanmakuSmartOcclusion(context)
             .collectAsState(initial = false)
+        val danmakuBlockRulesRaw by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuBlockRulesRaw(context)
+            .collectAsState(initial = "")
+        val danmakuBlockRules by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuBlockRules(context)
+            .collectAsState(initial = emptyList())
         val faceDetector = remember { createFaceOcclusionDetector() }
         DisposableEffect(faceDetector) {
             onDispose { faceDetector.close() }
@@ -744,6 +750,7 @@ fun VideoPlayerSection(
             danmakuAllowBottom,
             danmakuAllowColorful,
             danmakuAllowSpecial,
+            danmakuBlockRules,
             danmakuSmartOcclusion
         ) {
             danmakuManager.updateSettings(
@@ -757,6 +764,7 @@ fun VideoPlayerSection(
                 allowBottom = danmakuAllowBottom,
                 allowColorful = danmakuAllowColorful,
                 allowSpecial = danmakuAllowSpecial,
+                blockedRules = danmakuBlockRules,
                 // Mask-only mode: keep lane layout fixed, do not move danmaku tracks.
                 smartOcclusion = false
             )
@@ -1319,6 +1327,7 @@ fun VideoPlayerSection(
                 danmakuAllowBottom = danmakuAllowBottom,
                 danmakuAllowColorful = danmakuAllowColorful,
                 danmakuAllowSpecial = danmakuAllowSpecial,
+                danmakuBlockRulesRaw = danmakuBlockRulesRaw,
                 danmakuSmartOcclusion = danmakuSmartOcclusion,
                 onDanmakuOpacityChange = { value ->
                     danmakuManager.opacity = value
@@ -1386,6 +1395,11 @@ fun VideoPlayerSection(
                 onDanmakuSmartOcclusionChange = { value ->
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager.setDanmakuSmartOcclusion(context, value)
+                    }
+                },
+                onDanmakuBlockRulesRawChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuBlockRulesRaw(context, value)
                     }
                 },
                 smartOcclusionModuleState = smartOcclusionModuleState,

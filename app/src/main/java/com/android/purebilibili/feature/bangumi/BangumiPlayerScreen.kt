@@ -163,6 +163,9 @@ fun BangumiPlayerScreen(
     val danmakuAllowSpecial by com.android.purebilibili.core.store.SettingsManager
         .getDanmakuAllowSpecial(context)
         .collectAsState(initial = true)
+    val danmakuBlockRules by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuBlockRules(context)
+        .collectAsState(initial = emptyList())
     
     //  弹幕设置变化时实时应用到 DanmakuManager
     LaunchedEffect(
@@ -175,7 +178,8 @@ fun BangumiPlayerScreen(
         danmakuAllowTop,
         danmakuAllowBottom,
         danmakuAllowColorful,
-        danmakuAllowSpecial
+        danmakuAllowSpecial,
+        danmakuBlockRules
     ) {
         danmakuManager.updateSettings(
             opacity = danmakuOpacity,
@@ -188,6 +192,7 @@ fun BangumiPlayerScreen(
             allowBottom = danmakuAllowBottom,
             allowColorful = danmakuAllowColorful,
             allowSpecial = danmakuAllowSpecial,
+            blockedRules = danmakuBlockRules,
             // Mask-only mode: keep lane layout fixed, do not move danmaku tracks.
             smartOcclusion = false
         )

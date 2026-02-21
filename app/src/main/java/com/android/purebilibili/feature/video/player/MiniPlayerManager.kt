@@ -101,6 +101,7 @@ internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
         "icon_neon", "Neon" -> R.mipmap.ic_launcher_neon_round
         "icon_retro", "Retro" -> R.mipmap.ic_launcher_retro_round
         "icon_flat", "Flat" -> R.mipmap.ic_launcher_flat_round
+        "icon_flat_material", "Flat Material", "FlatMaterial" -> R.mipmap.ic_launcher_flat_material_round
         "icon_anime", "Anime" -> R.mipmap.ic_launcher_anime
         "icon_telegram_blue", "Telegram Blue" -> R.mipmap.ic_launcher_telegram_blue_round
         "icon_telegram_green", "Green", "Telegram Green" -> R.mipmap.ic_launcher_telegram_green_round

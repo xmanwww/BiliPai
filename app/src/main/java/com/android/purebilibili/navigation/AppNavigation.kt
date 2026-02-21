@@ -880,7 +880,7 @@ fun AppNavigation(
                 onAppearanceClick = { navController.navigate(ScreenRoutes.AppearanceSettings.route) },
                 onPlaybackClick = { navController.navigate(ScreenRoutes.PlaybackSettings.route) },
                 onPermissionClick = { navController.navigate(ScreenRoutes.PermissionSettings.route) },
-                onPluginsClick = { navController.navigate(ScreenRoutes.PluginsSettings.route) },
+                onPluginsClick = { navController.navigate(ScreenRoutes.PluginsSettings.createRoute()) },
                 onNavigateToBottomBarSettings = { navController.navigate(ScreenRoutes.BottomBarSettings.route) },
                 onTipsClick = { navController.navigate(ScreenRoutes.TipsSettings.route) }, // [Feature] Tips
                 onReplayOnboardingClick = { navController.navigate(ScreenRoutes.Onboarding.route) },
@@ -1034,11 +1034,22 @@ fun AppNavigation(
         // ---  插件中心页面 ---
         composable(
             route = ScreenRoutes.PluginsSettings.route,
+            arguments = listOf(
+                navArgument("importUrl") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
-        ) {
+        ) { backStackEntry ->
+            val initialImportUrl = backStackEntry.arguments
+                ?.getString("importUrl")
+                ?.let { android.net.Uri.decode(it) }
             com.android.purebilibili.feature.settings.PluginsScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                initialImportUrl = initialImportUrl
             )
         }
         

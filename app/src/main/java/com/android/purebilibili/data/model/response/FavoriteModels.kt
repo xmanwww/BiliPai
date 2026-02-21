@@ -53,7 +53,8 @@ data class FavFolder(
     val fid: Long = 0,
     val mid: Long = 0,
     val title: String = "",
-    val media_count: Int = 0
+    val media_count: Int = 0,
+    val fav_state: Int = 0
 )
 
 // --- 收藏夹内容单项 ---

@@ -212,6 +212,15 @@ fun PortraitFullscreenOverlay(
                 )
             }
         }
+
+        // 控件隐藏时仍显示底部细进度条，方便随时感知播放进度
+        if (!showControls) {
+            PersistentBottomProgressBar(
+                current = progress.current,
+                duration = progress.duration,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
     }
 }
 

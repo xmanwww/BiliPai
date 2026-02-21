@@ -48,13 +48,13 @@ class VideoDetailLayoutModePolicyTest {
     fun portraitAndInteractionUi_policiesReflectCurrentBehavior() {
         assertTrue(shouldEnablePortraitExperience())
         assertFalse(shouldShowVideoDetailBottomInteractionBar())
-        assertFalse(shouldShowVideoDetailActionButtons())
+        assertTrue(shouldShowVideoDetailActionButtons())
     }
 
     @Test
     fun interactionUi_isHiddenOnPhoneToo() {
         assertFalse(shouldShowVideoDetailBottomInteractionBar())
-        assertFalse(shouldShowVideoDetailActionButtons())
+        assertTrue(shouldShowVideoDetailActionButtons())
     }
 
     @Test

@@ -150,6 +150,25 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="bilipai" />
             </intent-filter>
+
+            <!-- 🔌 Plugin Install Links -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="bilipai.app" android:pathPrefix="/plugin/install" />
+                <data android:scheme="https" android:host="bilipai.app" android:pathPrefix="/plugins/install" />
+                <data android:scheme="https" android:host="www.bilipai.app" android:pathPrefix="/plugin/install" />
+                <data android:scheme="https" android:host="www.bilipai.app" android:pathPrefix="/plugins/install" />
+                <data android:scheme="https" android:host="plugins.bilipai.app" android:pathPrefix="/plugin/install" />
+                <data android:scheme="https" android:host="plugins.bilipai.app" android:pathPrefix="/plugins/install" />
+                <data android:scheme="http" android:host="bilipai.app" android:pathPrefix="/plugin/install" />
+                <data android:scheme="http" android:host="bilipai.app" android:pathPrefix="/plugins/install" />
+                <data android:scheme="http" android:host="www.bilipai.app" android:pathPrefix="/plugin/install" />
+                <data android:scheme="http" android:host="www.bilipai.app" android:pathPrefix="/plugins/install" />
+                <data android:scheme="http" android:host="plugins.bilipai.app" android:pathPrefix="/plugin/install" />
+                <data android:scheme="http" android:host="plugins.bilipai.app" android:pathPrefix="/plugins/install" />
+            </intent-filter>
         </activity>
 
         <!-- Yuki 比心少女 (可在设置中切换) -->

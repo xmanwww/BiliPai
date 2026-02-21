@@ -8,7 +8,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,7 +18,10 @@ import com.android.purebilibili.data.model.response.FavFolder
 fun FavoriteFolderSheet(
     folders: List<FavFolder>,
     isLoading: Boolean,
-    onFolderClick: (FavFolder) -> Unit,
+    selectedFolderIds: Set<Long>,
+    isSaving: Boolean,
+    onFolderToggle: (FavFolder) -> Unit,
+    onSaveClick: () -> Unit,
     onDismissRequest: () -> Unit,
     onCreateFolder: (String, String, Boolean) -> Unit = { _, _, _ -> }
 ) {
@@ -86,10 +88,44 @@ fun FavoriteFolderSheet(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     items(folders) { folder ->
-                        FavoriteFolderItem(folder = folder, onClick = { onFolderClick(folder) })
+                        FavoriteFolderItem(
+                            folder = folder,
+                            selected = selectedFolderIds.contains(folder.id),
+                            onClick = { onFolderToggle(folder) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "已选择 ${selectedFolderIds.size} 个收藏夹",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = onSaveClick,
+                    enabled = !isLoading && !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("保存")
                     }
                 }
             }
@@ -160,6 +196,7 @@ fun CreateFolderDialog(
 @Composable
 fun FavoriteFolderItem(
     folder: FavFolder,
+    selected: Boolean,
     onClick: () -> Unit
 ) {
     Row(
@@ -183,5 +220,9 @@ fun FavoriteFolderItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Checkbox(
+            checked = selected,
+            onCheckedChange = { onClick() }
+        )
     }
 }

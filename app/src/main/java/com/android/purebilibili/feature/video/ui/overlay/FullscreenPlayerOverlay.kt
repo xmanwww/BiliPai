@@ -397,6 +397,12 @@ fun FullscreenPlayerOverlay(
         val danmakuSmartOcclusion by SettingsManager
             .getDanmakuSmartOcclusion(context)
             .collectAsState(initial = false)
+        val danmakuBlockRulesRaw by SettingsManager
+            .getDanmakuBlockRulesRaw(context)
+            .collectAsState(initial = "")
+        val danmakuBlockRules by SettingsManager
+            .getDanmakuBlockRules(context)
+            .collectAsState(initial = emptyList())
         val faceDetector = remember { createFaceOcclusionDetector() }
         DisposableEffect(faceDetector) {
             onDispose {
@@ -443,6 +449,7 @@ fun FullscreenPlayerOverlay(
             danmakuAllowBottom,
             danmakuAllowColorful,
             danmakuAllowSpecial,
+            danmakuBlockRules,
             danmakuSmartOcclusion
         ) {
             danmakuManager.updateSettings(
@@ -456,6 +463,7 @@ fun FullscreenPlayerOverlay(
                 allowBottom = danmakuAllowBottom,
                 allowColorful = danmakuAllowColorful,
                 allowSpecial = danmakuAllowSpecial,
+                blockedRules = danmakuBlockRules,
                 // Mask-only mode: keep lane layout fixed, do not move danmaku tracks.
                 smartOcclusion = false
             )
@@ -797,6 +805,7 @@ fun FullscreenPlayerOverlay(
             var localAllowColorful by remember(danmakuAllowColorful) { mutableStateOf(danmakuAllowColorful) }
             var localAllowSpecial by remember(danmakuAllowSpecial) { mutableStateOf(danmakuAllowSpecial) }
             var localSmartOcclusion by remember(danmakuSmartOcclusion) { mutableStateOf(danmakuSmartOcclusion) }
+            var localBlockRulesRaw by remember(danmakuBlockRulesRaw) { mutableStateOf(danmakuBlockRulesRaw) }
             
             DanmakuSettingsPanel(
                 opacity = localOpacity,
@@ -809,6 +818,8 @@ fun FullscreenPlayerOverlay(
                 allowBottom = localAllowBottom,
                 allowColorful = localAllowColorful,
                 allowSpecial = localAllowSpecial,
+                showBlockRuleEditor = true,
+                blockRulesRaw = localBlockRulesRaw,
                 smartOcclusion = localSmartOcclusion,
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
@@ -861,6 +872,10 @@ fun FullscreenPlayerOverlay(
                 onSmartOcclusionChange = {
                     localSmartOcclusion = it
                     scope.launch { SettingsManager.setDanmakuSmartOcclusion(context, it) }
+                },
+                onBlockRulesRawChange = {
+                    localBlockRulesRaw = it
+                    scope.launch { SettingsManager.setDanmakuBlockRulesRaw(context, it) }
                 },
                 onSmartOcclusionDownloadClick = {
                     if (smartOcclusionModuleState != FaceOcclusionModuleState.Downloading) {

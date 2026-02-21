@@ -66,7 +66,11 @@ interface BilibiliApi {
     ): HistoryResponse
 
     @GET("x/v3/fav/folder/created/list-all")
-    suspend fun getFavFolders(@Query("up_mid") mid: Long): FavFolderResponse
+    suspend fun getFavFolders(
+        @Query("up_mid") mid: Long,
+        @Query("type") type: Int? = null,
+        @Query("rid") rid: Long? = null
+    ): FavFolderResponse
 
     // [新增] 创建收藏夹
     @retrofit2.http.FormUrlEncoded
@@ -107,6 +111,23 @@ interface BilibiliApi {
         @Query("pn") pn: Int = 1,
         @Query("ps") ps: Int = 20
     ): PopularResponse  //  使用专用响应类型
+
+    @GET("x/web-interface/ranking/v2")
+    suspend fun getRankingVideos(
+        @Query("rid") rid: Int = 0,
+        @Query("type") type: String = "all"
+    ): RankingResponse
+
+    @GET("x/web-interface/popular/precious")
+    suspend fun getPopularPreciousVideos(): PopularPreciousResponse
+
+    @GET("x/web-interface/popular/series/list")
+    suspend fun getWeeklySeriesList(): PopularSeriesListResponse
+
+    @GET("x/web-interface/popular/series/one")
+    suspend fun getWeeklySeriesVideos(
+        @Query("number") number: Int
+    ): PopularSeriesOneResponse
     
     //  [修复] 分区视频 - 使用 dynamic/region API 返回完整 stat（包含播放量）
     // 原 newlist API 不返回 stat 数据

@@ -133,6 +133,7 @@ fun VideoPlayerOverlay(
     danmakuAllowBottom: Boolean = true,
     danmakuAllowColorful: Boolean = true,
     danmakuAllowSpecial: Boolean = true,
+    danmakuBlockRulesRaw: String = "",
     danmakuSmartOcclusion: Boolean = true,
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
@@ -144,6 +145,7 @@ fun VideoPlayerOverlay(
     onDanmakuAllowBottomChange: (Boolean) -> Unit = {},
     onDanmakuAllowColorfulChange: (Boolean) -> Unit = {},
     onDanmakuAllowSpecialChange: (Boolean) -> Unit = {},
+    onDanmakuBlockRulesRawChange: (String) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
     smartOcclusionDownloadProgress: Int? = null,
@@ -396,7 +398,16 @@ fun VideoPlayerOverlay(
                                 Color.Black.copy(alpha = 0.9f)
                             )
                         )
-                    )
+                )
+            )
+        }
+
+        // 控件隐藏时保留底部细进度条，便于持续感知当前播放进度
+        if (!isVisible) {
+            PersistentBottomProgressBar(
+                current = progressState.current,
+                duration = progressState.duration,
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
 
@@ -689,6 +700,8 @@ fun VideoPlayerOverlay(
                 allowBottom = danmakuAllowBottom,
                 allowColorful = danmakuAllowColorful,
                 allowSpecial = danmakuAllowSpecial,
+                showBlockRuleEditor = true,
+                blockRulesRaw = danmakuBlockRulesRaw,
                 smartOcclusion = danmakuSmartOcclusion,
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
@@ -702,6 +715,7 @@ fun VideoPlayerOverlay(
                 onAllowBottomChange = onDanmakuAllowBottomChange,
                 onAllowColorfulChange = onDanmakuAllowColorfulChange,
                 onAllowSpecialChange = onDanmakuAllowSpecialChange,
+                onBlockRulesRawChange = onDanmakuBlockRulesRawChange,
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                 onSmartOcclusionDownloadClick = onDanmakuSmartOcclusionDownloadClick,
                 onDismiss = { showDanmakuSettings = false }

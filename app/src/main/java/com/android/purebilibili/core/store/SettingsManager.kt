@@ -12,6 +12,7 @@ import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuOpacity
+import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -459,21 +460,22 @@ object SettingsManager {
 
     //  [新增] --- 应用图标 ---
     fun getAppIcon(context: Context): Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_APP_ICON] ?: "icon_3d" }
+        .map { preferences -> normalizeAppIconKey(preferences[KEY_APP_ICON]) }
 
     suspend fun setAppIcon(context: Context, iconKey: String) {
+        val normalizedKey = normalizeAppIconKey(iconKey)
         // 1. Write to DataStore (suspends until persisted)
         context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_APP_ICON] = iconKey
+            preferences[KEY_APP_ICON] = normalizedKey
         }
         
         // 2. Write to SharedPreferences synchronously using commit()
         // This is critical because changing the app icon (activity-alias) often kills the process immediately.
         // apply() is asynchronous and might not finish before the process dies.
         val success = context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
-            .edit().putString("current_icon", iconKey).commit()
+            .edit().putString("current_icon", normalizedKey).commit()
             
-        com.android.purebilibili.core.util.Logger.d("SettingsManager", "App icon saved: $iconKey, persisted to prefs: $success")
+        com.android.purebilibili.core.util.Logger.d("SettingsManager", "App icon saved: $iconKey -> $normalizedKey, persisted to prefs: $success")
     }
     
     //  [新增] --- 开屏壁纸 ---
@@ -515,8 +517,10 @@ object SettingsManager {
     
     //  同步读取当前图标设置（用于 Application 启动时同步）
     fun getAppIconSync(context: Context): String {
-        return context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
-            .getString("current_icon", "icon_3d") ?: "icon_3d"
+        return normalizeAppIconKey(
+            context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
+                .getString("current_icon", DEFAULT_APP_ICON_KEY)
+        )
     }
 
     //  [新增] --- 底部栏样式 ---
@@ -672,6 +676,7 @@ object SettingsManager {
     private val KEY_DANMAKU_ALLOW_COLORFUL = booleanPreferencesKey("danmaku_allow_colorful")
     private val KEY_DANMAKU_ALLOW_SPECIAL = booleanPreferencesKey("danmaku_allow_special")
     private val KEY_DANMAKU_SMART_OCCLUSION = booleanPreferencesKey("danmaku_smart_occlusion")
+    private val KEY_DANMAKU_BLOCK_RULES = stringPreferencesKey("danmaku_block_rules")
     private val KEY_DANMAKU_DEFAULTS_VERSION = intPreferencesKey("danmaku_defaults_version")
     private val KEY_HOME_VISUAL_DEFAULTS_VERSION = intPreferencesKey("home_visual_defaults_version")
     
@@ -777,6 +782,19 @@ object SettingsManager {
     suspend fun setDanmakuSmartOcclusion(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_DANMAKU_SMART_OCCLUSION] = value
+        }
+    }
+
+    fun getDanmakuBlockRulesRaw(context: Context): Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_BLOCK_RULES] ?: "" }
+
+    fun getDanmakuBlockRules(context: Context): Flow<List<String>> = context.settingsDataStore.data
+        .map { preferences -> parseDanmakuBlockRules(preferences[KEY_DANMAKU_BLOCK_RULES] ?: "") }
+
+    suspend fun setDanmakuBlockRulesRaw(context: Context, value: String) {
+        val normalized = parseDanmakuBlockRules(value).joinToString(separator = "\n")
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_BLOCK_RULES] = normalized
         }
     }
     

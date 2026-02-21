@@ -79,6 +79,8 @@ internal fun HomeCategoryPageContent(
     onTodayWatchModeChange: (TodayWatchMode) -> Unit = {},
     onTodayWatchCollapsedChange: (Boolean) -> Unit = {},
     onTodayWatchRefresh: () -> Unit = {},
+    popularSubCategory: PopularSubCategory = PopularSubCategory.COMPREHENSIVE,
+    onPopularSubCategoryChange: (PopularSubCategory) -> Unit = {},
     onTodayWatchVideoClick: (VideoItem) -> Unit = { video ->
         onVideoClick(
             HomeVideoClickRequest(
@@ -188,6 +190,25 @@ internal fun HomeCategoryPageContent(
                             onRefresh = onTodayWatchRefresh,
                             onVideoClick = onTodayWatchVideoClick
                         )
+                    }
+                }
+            }
+            if (category == HomeCategory.POPULAR) {
+                item(span = { GridItemSpan(gridColumns) }) {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PopularSubCategory.entries.forEach { subCategory ->
+                            FilterChip(
+                                selected = popularSubCategory == subCategory,
+                                onClick = { onPopularSubCategoryChange(subCategory) },
+                                label = { Text(subCategory.label) }
+                            )
+                        }
                     }
                 }
             }

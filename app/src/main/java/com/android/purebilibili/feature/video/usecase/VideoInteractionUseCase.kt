@@ -62,12 +62,31 @@ class VideoInteractionUseCase {
             }
         }
     }
+
+    /**
+     * 批量更新收藏夹多选
+     */
+    suspend fun updateFavoriteFolders(
+        aid: Long,
+        addFolderIds: Set<Long>,
+        removeFolderIds: Set<Long>
+    ): Result<Boolean> {
+        Logger.d(
+            TAG,
+            "updateFavoriteFolders: aid=$aid, add=${addFolderIds.size}, remove=${removeFolderIds.size}"
+        )
+        return ActionRepository.updateFavoriteFolders(
+            aid = aid,
+            addFolderIds = addFolderIds,
+            removeFolderIds = removeFolderIds
+        )
+    }
     
     /**
      * 获取用户收藏夹列表
      */
-    suspend fun getFavoriteFolders(): Result<List<FavFolder>> {
-        return ActionRepository.getFavoriteFolders()
+    suspend fun getFavoriteFolders(aid: Long? = null): Result<List<FavFolder>> {
+        return ActionRepository.getFavoriteFolders(aid)
     }
     
     /**

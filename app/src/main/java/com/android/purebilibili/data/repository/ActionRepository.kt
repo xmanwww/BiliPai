@@ -64,12 +64,11 @@ object ActionRepository {
                 if (targetFolderId == null) {
                     return@withContext Result.failure(Exception("无法获取收藏夹"))
                 }
-                
-                val folderIdStr = targetFolderId.toString()
+
                 val response = if (favorite) {
-                    api.dealFavorite(rid = aid, addIds = folderIdStr, delIds = "", csrf = csrf)
+                    api.dealFavorite(rid = aid, addIds = targetFolderId.toString(), delIds = "", csrf = csrf)
                 } else {
-                    api.dealFavorite(rid = aid, addIds = "", delIds = folderIdStr, csrf = csrf)
+                    api.dealFavorite(rid = aid, addIds = "", delIds = targetFolderId.toString(), csrf = csrf)
                 }
                 
                 if (response.code == 0) {
@@ -95,6 +94,40 @@ object ActionRepository {
         } catch (e: Exception) {
             android.util.Log.e("ActionRepository", "getDefaultFolderId failed", e)
             null
+        }
+    }
+
+    /**
+     * 批量更新视频所属收藏夹（多选保存）
+     */
+    suspend fun updateFavoriteFolders(
+        aid: Long,
+        addFolderIds: Set<Long>,
+        removeFolderIds: Set<Long>
+    ): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val csrf = TokenManager.csrfCache ?: ""
+                if (csrf.isEmpty()) {
+                    return@withContext Result.failure(Exception("请先登录"))
+                }
+                if (addFolderIds.isEmpty() && removeFolderIds.isEmpty()) {
+                    return@withContext Result.success(true)
+                }
+
+                val addIds = addFolderIds.sorted().joinToString(",")
+                val delIds = removeFolderIds.sorted().joinToString(",")
+                val response = api.dealFavorite(rid = aid, addIds = addIds, delIds = delIds, csrf = csrf)
+
+                if (response.code == 0) {
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "操作失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ActionRepository", "updateFavoriteFolders failed", e)
+                Result.failure(e)
+            }
         }
     }
     
@@ -143,11 +176,15 @@ object ActionRepository {
     /**
      * 获取用户收藏夹列表
      */
-    suspend fun getFavoriteFolders(): Result<List<com.android.purebilibili.data.model.response.FavFolder>> {
+    suspend fun getFavoriteFolders(aid: Long? = null): Result<List<com.android.purebilibili.data.model.response.FavFolder>> {
         return withContext(Dispatchers.IO) {
             try {
                 val mid = TokenManager.midCache ?: return@withContext Result.failure(Exception("请先登录"))
-                val response = api.getFavFolders(mid)
+                val response = api.getFavFolders(
+                    mid = mid,
+                    type = aid?.let { 2 },
+                    rid = aid
+                )
                 if (response.code == 0) {
                     Result.success(response.data?.list ?: emptyList())
                 } else {

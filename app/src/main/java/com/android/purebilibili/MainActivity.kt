@@ -59,10 +59,18 @@ import dev.chrisbanes.haze.haze
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.net.URI
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
 private const val KEY_FIRST_LAUNCH = "first_launch_shown"
+private val PLUGIN_INSTALL_HTTPS_HOSTS = setOf(
+    "bilipai.app",
+    "www.bilipai.app",
+    "plugins.bilipai.app"
+)
 
 internal fun resolveShortcutRoute(host: String): String? {
     return when (host) {
@@ -72,9 +80,50 @@ internal fun resolveShortcutRoute(host: String): String? {
         "history" -> com.android.purebilibili.navigation.ScreenRoutes.History.route
         "login" -> com.android.purebilibili.navigation.ScreenRoutes.Login.route
         "playback" -> com.android.purebilibili.navigation.ScreenRoutes.PlaybackSettings.route
-        "plugins" -> com.android.purebilibili.navigation.ScreenRoutes.PluginsSettings.route
+        "plugins" -> com.android.purebilibili.navigation.ScreenRoutes.PluginsSettings.createRoute()
         else -> null
     }
+}
+
+internal data class PluginInstallDeepLinkRequest(
+    val pluginUrl: String
+)
+
+internal fun resolvePluginInstallDeepLink(rawDeepLink: String): PluginInstallDeepLinkRequest? {
+    val uri = runCatching { URI(rawDeepLink) }.getOrNull() ?: return null
+    val normalizedScheme = uri.scheme?.lowercase() ?: return null
+    val normalizedHost = uri.host?.lowercase() ?: return null
+    val normalizedPath = uri.path?.trim()?.trimEnd('/') ?: ""
+
+    val installLinkMatched = when (normalizedScheme) {
+        "bilipai" -> normalizedHost == "plugin" && normalizedPath == "/install"
+        "https", "http" -> normalizedHost in PLUGIN_INSTALL_HTTPS_HOSTS &&
+            normalizedPath in setOf("/plugin/install", "/plugins/install")
+        else -> false
+    }
+    if (!installLinkMatched) return null
+
+    val queryMap = uri.rawQuery
+        ?.split("&")
+        ?.mapNotNull { part ->
+            if (part.isBlank()) return@mapNotNull null
+            val pair = part.split("=", limit = 2)
+            val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8)
+            val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8)
+            key to value
+        }
+        ?.toMap()
+        ?: emptyMap()
+
+    val rawUrl = queryMap["url"]?.trim().orEmpty()
+    if (rawUrl.isBlank()) return null
+
+    val targetUri = runCatching { URI(rawUrl) }.getOrNull() ?: return null
+    val scheme = targetUri.scheme?.lowercase()
+    if (scheme !in listOf("http", "https") || targetUri.host.isNullOrBlank()) {
+        return null
+    }
+    return PluginInstallDeepLinkRequest(pluginUrl = rawUrl)
 }
 
 @OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
@@ -173,6 +222,14 @@ class MainActivity : ComponentActivity() {
                         navController.navigate(it) { launchSingleTop = true }
                     }
                     pendingRoute = null  // 清除，避免重复导航
+                }
+            }
+
+            LaunchedEffect(pendingNavigationRoute) {
+                pendingNavigationRoute?.let { route ->
+                    Logger.d(TAG, "🚀 导航到指定页面: $route")
+                    navController.navigate(route) { launchSingleTop = true }
+                    pendingNavigationRoute = null
                 }
             }
             
@@ -430,6 +487,7 @@ class MainActivity : ComponentActivity() {
     //  待导航的视频 ID（用于在 Compose 中触发导航）
     var pendingVideoId by mutableStateOf<String?>(null)
     var pendingRoute by mutableStateOf<String?>(null)  // 🚀 App Shortcuts: pending route
+    var pendingNavigationRoute by mutableStateOf<String?>(null)
         private set
     
     /**
@@ -447,6 +505,14 @@ class MainActivity : ComponentActivity() {
                 if (uri != null) {
                     val scheme = uri.scheme ?: ""
                     val host = uri.host ?: ""
+
+                    val pluginInstallRequest = resolvePluginInstallDeepLink(uri.toString())
+                    if (pluginInstallRequest != null) {
+                        pendingNavigationRoute = com.android.purebilibili.navigation.ScreenRoutes.PluginsSettings
+                            .createRoute(importUrl = pluginInstallRequest.pluginUrl)
+                        Logger.d(TAG, "🚀 Plugin install deep link detected: ${pluginInstallRequest.pluginUrl}")
+                        return
+                    }
                     
                     // 🚀 App Shortcuts: bilipai:// scheme
                     if (scheme == "bilipai") {
@@ -476,7 +542,18 @@ class MainActivity : ComponentActivity() {
                     
                     // 检查是否包含 b23.tv 短链接
                     val urls = com.android.purebilibili.core.util.BilibiliUrlParser.extractUrls(text)
+                    val pluginInstallLink = urls.firstOrNull { resolvePluginInstallDeepLink(it) != null }
                     val shortLink = urls.find { it.contains("b23.tv") }
+
+                    if (pluginInstallLink != null) {
+                        val pluginInstallRequest = resolvePluginInstallDeepLink(pluginInstallLink)
+                        if (pluginInstallRequest != null) {
+                            pendingNavigationRoute = com.android.purebilibili.navigation.ScreenRoutes.PluginsSettings
+                                .createRoute(importUrl = pluginInstallRequest.pluginUrl)
+                            Logger.d(TAG, "🚀 Plugin install shared link detected: ${pluginInstallRequest.pluginUrl}")
+                            return
+                        }
+                    }
                     
                     if (shortLink != null) {
                         resolveShortLinkAndNavigate(shortLink)

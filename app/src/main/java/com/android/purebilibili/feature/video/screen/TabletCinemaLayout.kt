@@ -206,7 +206,7 @@ fun TabletCinemaLayout(
                         modifier = Modifier.weight(1f),
                         onFollowClick = { viewModel.toggleFollow() },
                         onUpClick = onUpClick,
-                        onFavoriteClick = { viewModel.toggleFavorite() },
+                        onFavoriteClick = { viewModel.showFavoriteFolderDialog() },
                         onLikeClick = { viewModel.toggleLike() },
                         onCoinClick = { viewModel.openCoinDialog() },
                         onTripleClick = { viewModel.doTripleAction() },

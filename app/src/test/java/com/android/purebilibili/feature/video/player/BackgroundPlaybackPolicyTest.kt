@@ -154,6 +154,8 @@ class BackgroundPlaybackPolicyTest {
         assertEquals(R.mipmap.ic_launcher_neon_round, resolveNotificationSmallIconRes("Neon"))
         assertEquals(R.mipmap.ic_launcher_telegram_pink_round, resolveNotificationSmallIconRes("Pink"))
         assertEquals(R.mipmap.ic_launcher_telegram_dark_round, resolveNotificationSmallIconRes("Dark"))
+        assertEquals(R.mipmap.ic_launcher_flat_material_round, resolveNotificationSmallIconRes("icon_flat_material"))
+        assertEquals(R.mipmap.ic_launcher_flat_material_round, resolveNotificationSmallIconRes("Flat Material"))
         assertEquals(R.mipmap.ic_launcher_3d_round, resolveNotificationSmallIconRes("unknown_key"))
     }
 }

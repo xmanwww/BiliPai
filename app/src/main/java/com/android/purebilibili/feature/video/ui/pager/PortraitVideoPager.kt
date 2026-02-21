@@ -152,6 +152,9 @@ fun PortraitVideoPager(
     val danmakuAllowSpecial by SettingsManager
         .getDanmakuAllowSpecial(context)
         .collectAsState(initial = true)
+    val danmakuBlockRules by SettingsManager
+        .getDanmakuBlockRules(context)
+        .collectAsState(initial = emptyList())
     val danmakuSmartOcclusion by SettingsManager
         .getDanmakuSmartOcclusion(context)
         .collectAsState(initial = false)
@@ -568,6 +571,7 @@ fun PortraitVideoPager(
         danmakuAllowBottom,
         danmakuAllowColorful,
         danmakuAllowSpecial,
+        danmakuBlockRules,
         danmakuSmartOcclusion
     ) {
         danmakuManager.updateSettings(
@@ -581,6 +585,7 @@ fun PortraitVideoPager(
             allowBottom = danmakuAllowBottom,
             allowColorful = danmakuAllowColorful,
             allowSpecial = danmakuAllowSpecial,
+            blockedRules = danmakuBlockRules,
             // Mask-only mode: keep lane layout fixed, do not move danmaku tracks.
             smartOcclusion = false
         )

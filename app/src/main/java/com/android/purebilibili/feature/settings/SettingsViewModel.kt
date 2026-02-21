@@ -5,6 +5,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
+import com.android.purebilibili.core.store.normalizeAppIconKey
+import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.util.CacheUtils
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +24,7 @@ data class SettingsUiState(
     val bgPlay: Boolean = false,
     val gestureSensitivity: Float = 1.0f,
     val themeColorIndex: Int = 0,
-    val appIcon: String = "Yuki",
+    val appIcon: String = "icon_3d",
     val isBottomBarFloating: Boolean = true,
     val bottomBarLabelMode: Int = 1,  // 0=图标+文字, 1=仅图标, 2=仅文字
     val headerBlurEnabled: Boolean = true,
@@ -362,51 +365,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     //  [新增] 切换应用图标
     fun setAppIcon(iconKey: String) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val normalizedIconKey = normalizeAppIconKey(iconKey)
             // 1. 保存偏好
-            SettingsManager.setAppIcon(context, iconKey)
+            SettingsManager.setAppIcon(context, normalizedIconKey)
             
             // 2. 应用 Alias
             val pm = context.packageManager
             val packageName = context.packageName
-            
-            // alias 映射 - 必须与 AndroidManifest.xml 中声明的完全一致
-            // [修复] 键必须与 IconSettingsScreen.kt 中的 IconOption.key 一致
-            val allAliases = listOf(
-                // 默认系列
-                "default" to "${packageName}.MainActivityAlias3DLauncher",  // 兼容旧键名，统一回到默认 3D
-                "icon_blue" to "${packageName}.MainActivityAliasBlue",
-                "icon_neon" to "${packageName}.MainActivityAliasNeon",
-                "icon_retro" to "${packageName}.MainActivityAliasRetro",
-                "icon_3d" to "${packageName}.MainActivityAlias3DLauncher",
-                // 特色系列
-                "icon_anime" to "${packageName}.MainActivityAliasAnime",
-                "icon_flat" to "${packageName}.MainActivityAliasFlat",
-                "icon_telegram_blue" to "${packageName}.MainActivityAliasTelegramBlue",
-                "icon_telegram_green" to "${packageName}.MainActivityAliasGreen",
-                "icon_telegram_pink" to "${packageName}.MainActivityAliasPink",
-                "icon_telegram_purple" to "${packageName}.MainActivityAliasPurple",
-                "icon_telegram_dark" to "${packageName}.MainActivityAliasDark",
-                // 兼容旧键名 (向后兼容)
-                "Yuki" to "${packageName}.MainActivityAliasYuki",
-                "Anime" to "${packageName}.MainActivityAliasAnime",
-                "Headphone" to "${packageName}.MainActivityAliasHeadphone",
-                "3D" to "${packageName}.MainActivityAlias3DLauncher",
-                "Blue" to "${packageName}.MainActivityAliasBlue",
-                "Retro" to "${packageName}.MainActivityAliasRetro",
-                "Flat" to "${packageName}.MainActivityAliasFlat",
-                "Neon" to "${packageName}.MainActivityAliasNeon",
-                "Telegram Blue" to "${packageName}.MainActivityAliasTelegramBlue"
-            )
-            
-            // 找到需要启用的 alias
-            val targetAlias = allAliases.find { it.first == iconKey }?.second
-                ?: "${packageName}.MainActivityAlias3DLauncher" // 默认 3D 图标
-            
-            // [修复] 获取所有唯一的 alias 名称（去重，因为向后兼容映射可能有重复）
-            val allUniqueAliases = allAliases.map { it.second }.distinct()
+
+            val targetAlias = resolveAppIconLauncherAlias(packageName, normalizedIconKey)
+            val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
             val compatAlias = "${packageName}.MainActivityAlias3D"
             
-            android.util.Log.d("SettingsViewModel", "Switching icon to: $iconKey -> $targetAlias")
+            android.util.Log.d("SettingsViewModel", "Switching icon to: $iconKey -> $normalizedIconKey -> $targetAlias")
             
             try {
                 // 第一步：先启用目标 alias（确保始终有一个活动入口点）
@@ -440,9 +411,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         android.util.Log.w("SettingsViewModel", "Failed to disable alias: $aliasFullName", e)
                     }
                 }
-                android.util.Log.d("SettingsViewModel", "Icon switch completed: $iconKey")
+                android.util.Log.d("SettingsViewModel", "Icon switch completed: $normalizedIconKey")
             } catch (e: Exception) {
-                android.util.Log.e("SettingsViewModel", "Failed to switch app icon to $iconKey", e)
+                android.util.Log.e("SettingsViewModel", "Failed to switch app icon to $normalizedIconKey", e)
             }
         }
     }

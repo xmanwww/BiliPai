@@ -121,6 +121,7 @@ class DanmakuManager private constructor(
     
     // 配置
     val config = DanmakuConfig()
+    private var blockedRuleMatchers: List<DanmakuBlockRuleMatcher> = emptyList()
 
     init {
         startDanmakuPluginObserver()
@@ -413,42 +414,76 @@ class DanmakuManager private constructor(
         advancedDanmakuList: List<AdvancedDanmakuData>
     ): Pair<List<DanmakuData>, List<AdvancedDanmakuData>> {
         val settings = currentTypeFilterSettings()
-        if (settings.allowScroll && settings.allowTop && settings.allowBottom && settings.allowColorful && settings.allowSpecial) {
+        if (
+            settings.allowScroll &&
+            settings.allowTop &&
+            settings.allowBottom &&
+            settings.allowColorful &&
+            settings.allowSpecial &&
+            blockedRuleMatchers.isEmpty()
+        ) {
             return Pair(standardDanmakuList, advancedDanmakuList)
         }
 
         var filteredStandardCount = 0
+        var blockedByKeywordStandardCount = 0
         val filteredStandard = standardDanmakuList.filter { data ->
             val textData = data as? TextData ?: return@filter true
             val danmakuType = mapLayerTypeToDanmakuType(textData.layerType)
             val color = textData.textColor ?: 0x00FFFFFF
-            val visible = shouldDisplayStandardDanmaku(
+            val typeVisible = shouldDisplayStandardDanmaku(
                 danmakuType = danmakuType,
                 color = color,
                 settings = settings
             )
-            if (!visible) {
+            if (!typeVisible) {
                 filteredStandardCount++
+                return@filter false
             }
-            visible
+            val content = textData.text.orEmpty()
+            val blockedByKeyword = shouldBlockDanmakuByMatchers(
+                content = content,
+                matchers = blockedRuleMatchers
+            )
+            if (blockedByKeyword) {
+                blockedByKeywordStandardCount++
+            }
+            !blockedByKeyword
         }
 
         var filteredAdvancedCount = 0
+        var blockedByKeywordAdvancedCount = 0
         val filteredAdvanced = advancedDanmakuList.filter { data ->
-            val visible = shouldDisplayAdvancedDanmaku(
+            val typeVisible = shouldDisplayAdvancedDanmaku(
                 color = data.color,
                 settings = settings
             )
-            if (!visible) {
+            if (!typeVisible) {
                 filteredAdvancedCount++
+                return@filter false
             }
-            visible
+            val blockedByKeyword = shouldBlockDanmakuByMatchers(
+                content = data.content,
+                matchers = blockedRuleMatchers
+            )
+            if (blockedByKeyword) {
+                blockedByKeywordAdvancedCount++
+            }
+            !blockedByKeyword
         }
 
-        if (filteredStandardCount > 0 || filteredAdvancedCount > 0) {
+        if (
+            filteredStandardCount > 0 ||
+            filteredAdvancedCount > 0 ||
+            blockedByKeywordStandardCount > 0 ||
+            blockedByKeywordAdvancedCount > 0
+        ) {
             Log.w(
                 TAG,
-                " Danmaku type filter applied: standard -$filteredStandardCount, advanced -$filteredAdvancedCount"
+                " Danmaku filter applied: type standard -$filteredStandardCount, " +
+                    "type advanced -$filteredAdvancedCount, " +
+                    "keyword standard -$blockedByKeywordStandardCount, " +
+                    "keyword advanced -$blockedByKeywordAdvancedCount"
             )
         }
         return Pair(filteredStandard, filteredAdvanced)
@@ -586,15 +621,18 @@ class DanmakuManager private constructor(
         allowBottom: Boolean = config.allowBottom,
         allowColorful: Boolean = config.allowColorful,
         allowSpecial: Boolean = config.allowSpecial,
+        blockedRules: List<String> = config.blockedRules,
         smartOcclusion: Boolean = config.smartOcclusionEnabled
     ) {
         val mergeChanged = config.mergeDuplicates != mergeDuplicates
+        val blockedRulesChanged = config.blockedRules != blockedRules
         val filterChanged =
             config.allowScroll != allowScroll ||
                 config.allowTop != allowTop ||
                 config.allowBottom != allowBottom ||
                 config.allowColorful != allowColorful ||
-                config.allowSpecial != allowSpecial
+                config.allowSpecial != allowSpecial ||
+                blockedRulesChanged
         val occlusionChanged = config.smartOcclusionEnabled != smartOcclusion
         
         config.opacity = opacity
@@ -607,7 +645,11 @@ class DanmakuManager private constructor(
         config.allowBottom = allowBottom
         config.allowColorful = allowColorful
         config.allowSpecial = allowSpecial
+        config.blockedRules = blockedRules
         config.smartOcclusionEnabled = smartOcclusion
+        if (blockedRulesChanged) {
+            blockedRuleMatchers = compileDanmakuBlockRules(blockedRules)
+        }
 
         if (occlusionChanged) {
             if (smartOcclusion) {

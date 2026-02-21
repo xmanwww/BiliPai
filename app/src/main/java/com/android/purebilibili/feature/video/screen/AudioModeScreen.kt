@@ -322,7 +322,7 @@ fun AudioModeScreen(
                                 icon = if (successState.isFavorited) CupertinoIcons.Filled.Star else CupertinoIcons.Outlined.Star,
                                 label = FormatUtils.formatStat(info.stat.favorite.toLong()),
                                 isActive = successState.isFavorited,
-                                onClick = { viewModel.toggleFavorite() }
+                                onClick = { viewModel.showFavoriteFolderDialog() }
                             )
                         }
                         

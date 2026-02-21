@@ -114,6 +114,21 @@ internal fun resolveCommentReplyTargets(replyRpid: Long?, replyRoot: Long?): Pai
     return root to parent
 }
 
+internal data class FavoriteFolderMutation(
+    val addFolderIds: Set<Long>,
+    val removeFolderIds: Set<Long>
+)
+
+internal fun resolveFavoriteFolderMutation(
+    original: Set<Long>,
+    selected: Set<Long>
+): FavoriteFolderMutation {
+    return FavoriteFolderMutation(
+        addFolderIds = selected - original,
+        removeFolderIds = original - selected
+    )
+}
+
 // ========== ViewModel ==========
 class PlayerViewModel : ViewModel() {
     // UseCases
@@ -319,11 +334,29 @@ class PlayerViewModel : ViewModel() {
     
     private val _isFavoriteFoldersLoading = MutableStateFlow(false)
     val isFavoriteFoldersLoading = _isFavoriteFoldersLoading.asStateFlow()
+
+    private val _favoriteSelectedFolderIds = MutableStateFlow<Set<Long>>(emptySet())
+    val favoriteSelectedFolderIds = _favoriteSelectedFolderIds.asStateFlow()
+
+    private val _isSavingFavoriteFolders = MutableStateFlow(false)
+    val isSavingFavoriteFolders = _isSavingFavoriteFolders.asStateFlow()
+
+    private var lastSavedFavoriteFolderIds: Set<Long> = emptySet()
+    private var favoriteFoldersBoundAid: Long? = null
     
     fun showFavoriteFolderDialog() {
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        if (favoriteFoldersBoundAid != null && favoriteFoldersBoundAid != current.info.aid) {
+            lastSavedFavoriteFolderIds = emptySet()
+            _favoriteSelectedFolderIds.value = emptySet()
+            _favoriteFolders.value = emptyList()
+        }
         _favoriteFolderDialogVisible.value = true
-        if (_favoriteFolders.value.isEmpty()) {
-            loadFavoriteFolders()
+        _favoriteSelectedFolderIds.value = lastSavedFavoriteFolderIds
+        val hasCacheForCurrentAid =
+            favoriteFoldersBoundAid == current.info.aid && _favoriteFolders.value.isNotEmpty()
+        if (!hasCacheForCurrentAid) {
+            loadFavoriteFolders(aid = current.info.aid)
         }
     }
     
@@ -331,13 +364,35 @@ class PlayerViewModel : ViewModel() {
         _favoriteFolderDialogVisible.value = false
     }
     
-    private fun loadFavoriteFolders() {
+    private fun loadFavoriteFolders(aid: Long? = null, keepCurrentSelection: Boolean = false) {
         viewModelScope.launch {
+            favoriteFoldersBoundAid = aid
             _isFavoriteFoldersLoading.value = true
-            val result = interactionUseCase.getFavoriteFolders()
+            val result = interactionUseCase.getFavoriteFolders(aid)
             result.fold(
                 onSuccess = { folders ->
                     _favoriteFolders.value = folders
+                    val selectedFromServer = folders
+                        .asSequence()
+                        .filter { it.fav_state == 1 }
+                        .map { it.id }
+                        .toSet()
+
+                    lastSavedFavoriteFolderIds = selectedFromServer
+
+                    _favoriteSelectedFolderIds.value = if (keepCurrentSelection) {
+                        val availableFolderIds = folders.asSequence().map { it.id }.toSet()
+                        val keptSelection = _favoriteSelectedFolderIds.value.intersect(availableFolderIds)
+                        if (keptSelection.isEmpty() && selectedFromServer.isNotEmpty()) {
+                            selectedFromServer
+                        } else {
+                            keptSelection
+                        }
+                    } else {
+                        selectedFromServer
+                    }
+
+                    updateFavoriteUiState(lastSavedFavoriteFolderIds)
                 },
                 onFailure = { e ->
                     toast("加载收藏夹失败: ${e.message}")
@@ -346,36 +401,66 @@ class PlayerViewModel : ViewModel() {
             _isFavoriteFoldersLoading.value = false
         }
     }
-    
-    fun addToFavoriteFolder(folder: com.android.purebilibili.data.model.response.FavFolder) {
+
+    fun toggleFavoriteFolderSelection(folderId: Long) {
+        _favoriteSelectedFolderIds.update { selected ->
+            if (selected.contains(folderId)) {
+                selected - folderId
+            } else {
+                selected + folderId
+            }
+        }
+    }
+
+    fun saveFavoriteFolderSelection() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
-        val currentBvid = current.info.bvid
-        val currentAid = current.info.aid
-        
+        if (_isSavingFavoriteFolders.value) return
+
+        val selectedFolderIds = _favoriteSelectedFolderIds.value
+        val mutation = resolveFavoriteFolderMutation(
+            original = lastSavedFavoriteFolderIds,
+            selected = selectedFolderIds
+        )
+
+        if (mutation.addFolderIds.isEmpty() && mutation.removeFolderIds.isEmpty()) {
+            dismissFavoriteFolderDialog()
+            toast("收藏夹未变更")
+            return
+        }
+
         viewModelScope.launch {
-            val result = interactionUseCase.toggleFavorite(
-                aid = currentAid,
-                currentlyFavorited = false, // 总是尝试添加
-                bvid = currentBvid,
-                folderId = folder.id
+            _isSavingFavoriteFolders.value = true
+            val result = interactionUseCase.updateFavoriteFolders(
+                aid = current.info.aid,
+                addFolderIds = mutation.addFolderIds,
+                removeFolderIds = mutation.removeFolderIds
             )
-            
+
             result.onSuccess {
-                toast("已收藏至: ${folder.title}")
-                dismissFavoriteFolderDialog()
-                // Update UI state might be handled by toggleFavorite flow inside usecase if observed, 
-                // but currently we manually update localized state in success block of loadVideo if needed.
-                // toggleFavorite updates ActionRepository which might not push updates here unless we reload.
-                // However, toggleFavorite returns Result<Boolean> (favorited state).
-                
-                // Manually update local state to reflect favorited
-                _uiState.update { state ->
-                    if (state is PlayerUiState.Success) {
-                        state.copy(isFavorited = true)
-                    } else state
+                lastSavedFavoriteFolderIds = selectedFolderIds
+                _favoriteFolders.update { folders ->
+                    folders.map { folder ->
+                        folder.copy(
+                            fav_state = if (selectedFolderIds.contains(folder.id)) 1 else 0
+                        )
+                    }
                 }
+                updateFavoriteUiState(selectedFolderIds)
+                dismissFavoriteFolderDialog()
+                toast(if (selectedFolderIds.isEmpty()) "已取消收藏" else "收藏设置已保存")
             }.onFailure { e ->
                 toast("收藏失败: ${e.message}")
+            }
+            _isSavingFavoriteFolders.value = false
+        }
+    }
+
+    private fun updateFavoriteUiState(selectedFolderIds: Set<Long>) {
+        _uiState.update { state ->
+            if (state is PlayerUiState.Success) {
+                state.copy(isFavorited = selectedFolderIds.isNotEmpty())
+            } else {
+                state
             }
         }
     }
@@ -385,8 +470,7 @@ class PlayerViewModel : ViewModel() {
             val result = com.android.purebilibili.data.repository.ActionRepository.createFavFolder(title, intro, isPrivate)
             result.onSuccess {
                 toast("创建收藏夹成功")
-                // 刷新文件夹列表
-                loadFavoriteFolders()
+                loadFavoriteFolders(aid = favoriteFoldersBoundAid, keepCurrentSelection = true)
             }.onFailure { e ->
                 toast("创建失败: ${e.message}")
             }
@@ -1271,22 +1355,7 @@ class PlayerViewModel : ViewModel() {
     }
     
     fun toggleFavorite() {
-        val current = _uiState.value as? PlayerUiState.Success ?: return
-        viewModelScope.launch {
-            interactionUseCase.toggleFavorite(current.info.aid, current.isFavorited, currentBvid)
-                .onSuccess { 
-                    val newStat = current.info.stat.copy(favorite = current.info.stat.favorite + if (it) 1 else -1)
-                    _uiState.value = current.copy(info = current.info.copy(stat = newStat), isFavorited = it)
-                    //  彩蛋：使用趣味消息（如果设置开启）
-                    val message = if (it && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
-                        com.android.purebilibili.core.util.EasterEggs.getFavoriteMessage()
-                    } else {
-                        if (it) "已收藏" else "已取消收藏"
-                    }
-                    toast(message)
-                }
-                .onFailure { toast(it.message ?: "\u64cd\u4f5c\u5931\u8d25") }
-        }
+        showFavoriteFolderDialog()
     }
     
     fun toggleLike() {

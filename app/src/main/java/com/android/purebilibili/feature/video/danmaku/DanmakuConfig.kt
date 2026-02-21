@@ -40,6 +40,7 @@ class DanmakuConfig {
     var allowBottom = true
     var allowColorful = true
     var allowSpecial = true
+    var blockedRules: List<String> = emptyList()
 
     // [新增] 智能避脸：根据检测到的人脸动态调整弹幕可显示带
     var smartOcclusionEnabled = false

@@ -30,7 +30,9 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.FollowingUser
+import com.android.purebilibili.data.repository.ActionRepository
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -48,17 +50,48 @@ sealed class FollowingListUiState {
     data class Error(val message: String) : FollowingListUiState()
 }
 
+data class BatchUnfollowResult(
+    val successCount: Int,
+    val failedCount: Int,
+    val succeededMids: Set<Long> = emptySet()
+)
+
+internal fun toggleFollowingSelection(current: Set<Long>, mid: Long): Set<Long> {
+    return if (current.contains(mid)) current - mid else current + mid
+}
+
+internal fun resolveFollowingSelectAll(
+    visibleMids: List<Long>,
+    currentSelected: Set<Long>
+): Set<Long> {
+    val visibleSet = visibleMids.toSet()
+    if (visibleSet.isEmpty()) return currentSelected
+    val allSelected = visibleSet.all { currentSelected.contains(it) }
+    return if (allSelected) currentSelected - visibleSet else currentSelected + visibleSet
+}
+
+internal fun buildBatchUnfollowResultMessage(successCount: Int, failedCount: Int): String {
+    return when {
+        failedCount == 0 -> "已取消关注 $successCount 位 UP 主"
+        successCount == 0 -> "批量取关失败，请稍后重试"
+        else -> "已取消关注 $successCount 位，$failedCount 位失败"
+    }
+}
+
 class FollowingListViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<FollowingListUiState>(FollowingListUiState.Loading)
     val uiState = _uiState.asStateFlow()
-    
-    private var currentPage = 1
+
+    private val _isBatchUnfollowing = MutableStateFlow(false)
+    val isBatchUnfollowing = _isBatchUnfollowing.asStateFlow()
+
     private var currentMid: Long = 0
+    private val removedUserMids = mutableSetOf<Long>()
     
     fun loadFollowingList(mid: Long) {
         if (mid <= 0) return
         currentMid = mid
-        currentPage = 1
+        removedUserMids.clear()
         
         viewModelScope.launch {
             _uiState.value = FollowingListUiState.Loading
@@ -67,7 +100,8 @@ class FollowingListViewModel : ViewModel() {
                 // 1. 加载第一页
                 val response = NetworkModule.api.getFollowings(mid, pn = 1, ps = 50)
                 if (response.code == 0 && response.data != null) {
-                    val initialUsers = response.data.list ?: emptyList()
+                    val initialUsers = response.data.list.orEmpty()
+                        .filterNot { removedUserMids.contains(it.mid) }
                     val total = response.data.total
                     
                     _uiState.value = FollowingListUiState.Success(
@@ -103,13 +137,18 @@ class FollowingListViewModel : ViewModel() {
                     if (mid != currentMid) break // 如果用户切换了查看的 UP 主，停止加载
                     
                     // 延迟一点时间，避免请求过于频繁触发风控
-                    kotlinx.coroutines.delay(300) 
+                    delay(300)
                     
                     val response = NetworkModule.api.getFollowings(mid, pn = page, ps = pageSize)
                     if (response.code == 0 && response.data != null) {
-                        val newUsers = response.data.list ?: emptyList()
+                        val newUsers = response.data.list.orEmpty()
+                            .filterNot { removedUserMids.contains(it.mid) }
                         if (newUsers.isNotEmpty()) {
                             currentUsers.addAll(newUsers)
+                            currentUsers = currentUsers
+                                .distinctBy { it.mid }
+                                .filterNot { removedUserMids.contains(it.mid) }
+                                .toMutableList()
                             
                             // 更新 UI 状态
                             _uiState.value = FollowingListUiState.Success(
@@ -141,6 +180,53 @@ class FollowingListViewModel : ViewModel() {
     
     // 手动加载更多 (已废弃，保留空实现兼容接口或删除)
     fun loadMore() { }
+
+    suspend fun batchUnfollow(targetUsers: List<FollowingUser>): BatchUnfollowResult {
+        if (targetUsers.isEmpty()) {
+            return BatchUnfollowResult(successCount = 0, failedCount = 0)
+        }
+        if (_isBatchUnfollowing.value) {
+            return BatchUnfollowResult(successCount = 0, failedCount = targetUsers.size)
+        }
+
+        _isBatchUnfollowing.value = true
+        val successMids = mutableSetOf<Long>()
+        var failedCount = 0
+        try {
+            targetUsers.forEachIndexed { index, user ->
+                val result = ActionRepository.followUser(user.mid, follow = false)
+                if (result.isSuccess) {
+                    successMids.add(user.mid)
+                } else {
+                    failedCount += 1
+                }
+                if (index < targetUsers.lastIndex) {
+                    delay(150)
+                }
+            }
+            if (successMids.isNotEmpty()) {
+                removedUserMids.addAll(successMids)
+                applyRemovedUsers(successMids)
+            }
+            return BatchUnfollowResult(
+                successCount = successMids.size,
+                failedCount = failedCount,
+                succeededMids = successMids
+            )
+        } finally {
+            _isBatchUnfollowing.value = false
+        }
+    }
+
+    private fun applyRemovedUsers(removedMids: Set<Long>) {
+        val current = _uiState.value as? FollowingListUiState.Success ?: return
+        val remainingUsers = current.users.filterNot { removedMids.contains(it.mid) }
+        val reducedTotal = (current.total - removedMids.size).coerceAtLeast(remainingUsers.size)
+        _uiState.value = current.copy(
+            users = remainingUsers,
+            total = reducedTotal
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -152,20 +238,42 @@ fun FollowingListScreen(
     viewModel: FollowingListViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    
+    val isBatchUnfollowing by viewModel.isBatchUnfollowing.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     LaunchedEffect(mid) {
         viewModel.loadFollowingList(mid)
     }
-    
+
     var searchQuery by remember { mutableStateOf("") }
+    var isEditMode by remember { mutableStateOf(false) }
+    var selectedMids by remember { mutableStateOf(setOf<Long>()) }
+    var showBatchUnfollowConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("我的关注") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    if (uiState is FollowingListUiState.Success) {
+                        TextButton(
+                            onClick = {
+                                isEditMode = !isEditMode
+                                if (!isEditMode) {
+                                    selectedMids = emptySet()
+                                }
+                            },
+                            enabled = !isBatchUnfollowing
+                        ) {
+                            Text(if (isEditMode) "完成" else "管理")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -218,6 +326,11 @@ fun FollowingListScreen(
                     }
                     
                     is FollowingListUiState.Success -> {
+                        LaunchedEffect(state.users) {
+                            val available = state.users.asSequence().map { it.mid }.toSet()
+                            selectedMids = selectedMids.intersect(available)
+                        }
+
                         // 🔍 过滤列表
                         val filteredUsers = remember(state.users, searchQuery) {
                             if (searchQuery.isBlank()) state.users
@@ -228,6 +341,9 @@ fun FollowingListScreen(
                                 }
                             }
                         }
+                        val visibleMids = remember(filteredUsers) { filteredUsers.map { it.mid } }
+                        val selectedCount = selectedMids.size
+                        val hasSelection = selectedCount > 0
 
                         if (filteredUsers.isEmpty() && searchQuery.isNotEmpty()) {
                              Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -238,7 +354,11 @@ fun FollowingListScreen(
                                 // 统计信息
                                 item {
                                     Text(
-                                        text = if (searchQuery.isEmpty()) "共 ${state.total} 个关注" else "找到 ${filteredUsers.size} 个结果",
+                                        text = when {
+                                            isEditMode -> "已选 $selectedCount 人"
+                                            searchQuery.isEmpty() -> "共 ${state.total} 个关注"
+                                            else -> "找到 ${filteredUsers.size} 个结果"
+                                        },
                                         fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -248,7 +368,15 @@ fun FollowingListScreen(
                                 items(filteredUsers, key = { it.mid }) { user ->
                                     FollowingUserItem(
                                         user = user,
-                                        onClick = { onUserClick(user.mid) }
+                                        isEditMode = isEditMode,
+                                        isSelected = selectedMids.contains(user.mid),
+                                        onClick = {
+                                            if (isEditMode) {
+                                                selectedMids = toggleFollowingSelection(selectedMids, user.mid)
+                                            } else {
+                                                onUserClick(user.mid)
+                                            }
+                                        }
                                     )
                                 }
                                 
@@ -285,6 +413,93 @@ fun FollowingListScreen(
                                 }
                             }
                         }
+
+                        if (isEditMode) {
+                            Surface(
+                                tonalElevation = 3.dp,
+                                shadowElevation = 3.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedMids = resolveFollowingSelectAll(
+                                                visibleMids = visibleMids,
+                                                currentSelected = selectedMids
+                                            )
+                                        },
+                                        enabled = !isBatchUnfollowing
+                                    ) {
+                                        val allVisibleSelected = visibleMids.isNotEmpty() &&
+                                            visibleMids.all { selectedMids.contains(it) }
+                                        Text(if (allVisibleSelected) "取消全选" else "全选当前")
+                                    }
+
+                                    Button(
+                                        onClick = { showBatchUnfollowConfirm = true },
+                                        enabled = hasSelection && !isBatchUnfollowing,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        if (isBatchUnfollowing) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        } else {
+                                            Text("取消关注 ($selectedCount)")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (showBatchUnfollowConfirm) {
+                            AlertDialog(
+                                onDismissRequest = {
+                                    if (!isBatchUnfollowing) showBatchUnfollowConfirm = false
+                                },
+                                title = { Text("批量取消关注") },
+                                text = { Text("确认取消关注已选择的 $selectedCount 位 UP 主吗？") },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            val targets = state.users.filter { selectedMids.contains(it.mid) }
+                                            scope.launch {
+                                                val result = viewModel.batchUnfollow(targets)
+                                                snackbarHostState.showSnackbar(
+                                                    buildBatchUnfollowResultMessage(
+                                                        successCount = result.successCount,
+                                                        failedCount = result.failedCount
+                                                    )
+                                                )
+                                                selectedMids = selectedMids - result.succeededMids
+                                                if (selectedMids.isEmpty()) {
+                                                    isEditMode = false
+                                                }
+                                                showBatchUnfollowConfirm = false
+                                            }
+                                        },
+                                        enabled = !isBatchUnfollowing
+                                    ) {
+                                        Text("确认")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(
+                                        onClick = { showBatchUnfollowConfirm = false },
+                                        enabled = !isBatchUnfollowing
+                                    ) {
+                                        Text("取消")
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -295,6 +510,8 @@ fun FollowingListScreen(
 @Composable
 private fun FollowingUserItem(
     user: FollowingUser,
+    isEditMode: Boolean,
+    isSelected: Boolean,
     onClick: () -> Unit
 ) {
     Row(
@@ -341,7 +558,12 @@ private fun FollowingUserItem(
                 )
             }
         }
+
+        if (isEditMode) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onClick() }
+            )
+        }
     }
 }
-
-

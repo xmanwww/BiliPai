@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.android.purebilibili.core.plugin.PluginInfo
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.theme.iOSPink  // 插件图标色
@@ -43,7 +44,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PluginsScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    initialImportUrl: String? = null
 ) {
     // Top-level state for managing plugins and editing
     val plugins by PluginManager.pluginsFlow.collectAsState()
@@ -89,7 +91,8 @@ fun PluginsScreen(
             modifier = Modifier.padding(padding),
             plugins = plugins,
             jsonPlugins = jsonPlugins,
-            onEditJsonPlugin = { editingPlugin = it }
+            onEditJsonPlugin = { editingPlugin = it },
+            initialImportUrl = initialImportUrl
         )
     }
 }
@@ -99,7 +102,8 @@ fun PluginsContent(
     modifier: Modifier = Modifier,
     plugins: List<com.android.purebilibili.core.plugin.PluginInfo>,
     jsonPlugins: List<com.android.purebilibili.core.plugin.json.LoadedJsonPlugin>,
-    onEditJsonPlugin: (com.android.purebilibili.core.plugin.json.JsonRulePlugin) -> Unit
+    onEditJsonPlugin: (com.android.purebilibili.core.plugin.json.JsonRulePlugin) -> Unit,
+    initialImportUrl: String? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
@@ -116,11 +120,60 @@ fun PluginsContent(
     var importUrl by remember { mutableStateOf("") }
     var isImporting by remember { mutableStateOf(false) }
     var importError by remember { mutableStateOf<String?>(null) }
+    var isPreviewLoading by remember { mutableStateOf(false) }
+    var showPreviewDialog by remember { mutableStateOf(false) }
+    var previewPlugin by remember { mutableStateOf<com.android.purebilibili.core.plugin.json.JsonRulePlugin?>(null) }
+    var previewSourceUrl by remember { mutableStateOf<String?>(null) }
+    var initialImportConsumed by remember(initialImportUrl) { mutableStateOf(false) }
     
     //  测试对话框状态
     var testingPluginId by remember { mutableStateOf<String?>(null) }
     var testResult by remember { mutableStateOf<Triple<Int, Int, List<com.android.purebilibili.data.model.response.VideoItem>>?>(null) }
     var testingSampleVideos by remember { mutableStateOf<List<com.android.purebilibili.data.model.response.VideoItem>>(emptyList()) }
+
+    fun validateImportUrlOrError(raw: String): String? {
+        val normalized = raw.trim()
+        if (normalized.isBlank()) return "请输入 URL"
+        val uri = Uri.parse(normalized)
+        val scheme = uri.scheme?.lowercase()
+        if (scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
+            return "请输入有效的 http/https 链接"
+        }
+        return null
+    }
+
+    fun requestPreview(rawUrl: String) {
+        val normalizedUrl = rawUrl.trim()
+        val validationError = validateImportUrlOrError(normalizedUrl)
+        if (validationError != null) {
+            importError = validationError
+            return
+        }
+
+        importError = null
+        isPreviewLoading = true
+        scope.launch {
+            val result = com.android.purebilibili.core.plugin.json.JsonPluginManager.previewFromUrl(normalizedUrl)
+            isPreviewLoading = false
+            if (result.isSuccess) {
+                previewPlugin = result.getOrNull()
+                previewSourceUrl = normalizedUrl
+                showPreviewDialog = true
+                showImportDialog = false
+            } else {
+                importError = result.exceptionOrNull()?.message ?: "预览失败"
+                showImportDialog = true
+            }
+        }
+    }
+
+    LaunchedEffect(initialImportUrl) {
+        if (!initialImportConsumed && !initialImportUrl.isNullOrBlank()) {
+            initialImportConsumed = true
+            importUrl = initialImportUrl.trim()
+            requestPreview(importUrl)
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -399,47 +452,28 @@ fun PluginsContent(
                             Text("正在安装...")
                         }
                     }
+                    if (isPreviewLoading) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("正在加载插件信息...")
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val normalizedUrl = importUrl.trim()
-                        if (normalizedUrl.isBlank()) {
-                            importError = "请输入 URL"
-                            return@TextButton
-                        }
-
-                        val uri = Uri.parse(normalizedUrl)
-                        val scheme = uri.scheme?.lowercase()
-                        if (scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
-                            importError = "请输入有效的 http/https 链接"
-                            return@TextButton
-                        }
-
-                        isImporting = true
-                        scope.launch {
-                            val result = com.android.purebilibili.core.plugin.json.JsonPluginManager.importFromUrl(normalizedUrl)
-                            isImporting = false
-                            
-                            if (result.isSuccess) {
-                                showImportDialog = false
-                                importUrl = ""
-                                importError = null
-                                //  显示成功 Toast
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "插件 \"${result.getOrNull()?.name}\" 安装成功！",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            } else {
-                                importError = result.exceptionOrNull()?.message ?: "安装失败"
-                            }
-                        }
+                        requestPreview(importUrl)
                     },
-                    enabled = !isImporting
+                    enabled = !isImporting && !isPreviewLoading
                 ) {
-                    Text("安装")
+                    Text("预览")
                 }
             },
             dismissButton = {
@@ -449,12 +483,131 @@ fun PluginsContent(
                         importUrl = ""
                         importError = null
                     },
-                    enabled = !isImporting
+                    enabled = !isImporting && !isPreviewLoading
                 ) {
                     Text("取消")
                 }
             }
         )
+    }
+
+    if (isPreviewLoading && !showImportDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {},
+            title = { Text("加载中") },
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    Text("正在加载插件信息...")
+                }
+            }
+        )
+    }
+
+    if (showPreviewDialog) {
+        val plugin = previewPlugin
+        val sourceUrl = previewSourceUrl
+        if (plugin != null && sourceUrl != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isImporting) {
+                        showPreviewDialog = false
+                    }
+                },
+                icon = {
+                    if (!plugin.iconUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = plugin.iconUrl,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    } else {
+                        Icon(CupertinoIcons.Default.Puzzlepiece, contentDescription = null)
+                    }
+                },
+                title = { Text("安装插件预览") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = plugin.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = plugin.description.ifEmpty { "无描述" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "作者：${plugin.author}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "版本：${plugin.version} · 类型：${plugin.type} · 规则数：${plugin.rules.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (isImporting) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                Text(
+                                    text = "正在安装...",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !isImporting,
+                        onClick = {
+                            isImporting = true
+                            scope.launch {
+                                val result = com.android.purebilibili.core.plugin.json.JsonPluginManager
+                                    .importFromUrl(sourceUrl)
+                                isImporting = false
+                                if (result.isSuccess) {
+                                    showPreviewDialog = false
+                                    importUrl = ""
+                                    importError = null
+                                    previewPlugin = null
+                                    previewSourceUrl = null
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "插件 \"${result.getOrNull()?.name}\" 安装成功！",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    importError = result.exceptionOrNull()?.message ?: "安装失败"
+                                    showImportDialog = true
+                                }
+                            }
+                        }
+                    ) {
+                        Text("确认安装")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !isImporting,
+                        onClick = { showPreviewDialog = false }
+                    ) {
+                        Text("取消")
+                    }
+                }
+            )
+        }
     }
     
     //  测试结果对话框
@@ -655,12 +808,22 @@ private fun JsonPluginItem(
                     .background(iOSPurple.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.Terminal,
-                    contentDescription = null,
-                    tint = iOSPurple,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (!plugin.iconUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = plugin.iconUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                } else {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.Terminal,
+                        contentDescription = null,
+                        tint = iOSPurple,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(14.dp))

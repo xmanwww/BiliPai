@@ -985,6 +985,9 @@ fun HomeScreen(
                                  val onTodayWatchModeChange = remember(viewModel) { { mode: TodayWatchMode -> viewModel.switchTodayWatchMode(mode) } }
                                  val onTodayWatchCollapsedChange = remember(viewModel) { { collapsed: Boolean -> viewModel.setTodayWatchCollapsed(collapsed) } }
                                  val onTodayWatchRefresh = remember(viewModel) { { viewModel.refreshTodayWatchOnly() } }
+                                 val onPopularSubCategoryChange = remember(viewModel) {
+                                     { subCategory: PopularSubCategory -> viewModel.switchPopularSubCategory(subCategory) }
+                                 }
 
                                  HomeCategoryPageContent(
                                      category = category,
@@ -1035,6 +1038,8 @@ fun HomeScreen(
                                      onTodayWatchModeChange = onTodayWatchModeChange,
                                      onTodayWatchCollapsedChange = onTodayWatchCollapsedChange,
                                      onTodayWatchRefresh = onTodayWatchRefresh,
+                                     popularSubCategory = state.popularSubCategory,
+                                     onPopularSubCategoryChange = onPopularSubCategoryChange,
                                      onTodayWatchVideoClick = onTodayWatchVideoClick,
                                      firstGridItemModifier = Modifier
                                  )

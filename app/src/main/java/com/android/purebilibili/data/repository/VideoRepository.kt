@@ -257,6 +257,67 @@ object VideoRepository {
             Result.failure(e)
         }
     }
+
+    suspend fun getRankingVideos(rid: Int = 0, type: String = "all"): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.getRankingVideos(rid = rid, type = type)
+            if (resp.code != 0) {
+                return@withContext Result.failure(Exception(resp.message.ifBlank { "排行榜加载失败(${resp.code})" }))
+            }
+            val list = resp.data?.list
+                ?.map { it.toVideoItem() }
+                ?.filter { it.bvid.isNotEmpty() }
+                ?: emptyList()
+            Result.success(list)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getPreciousVideos(): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.getPopularPreciousVideos()
+            if (resp.code != 0) {
+                return@withContext Result.failure(Exception(resp.message.ifBlank { "入站必刷加载失败(${resp.code})" }))
+            }
+            val list = resp.data?.list
+                ?.map { it.toVideoItem() }
+                ?.filter { it.bvid.isNotEmpty() }
+                ?: emptyList()
+            Result.success(list)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getWeeklyMustWatchVideos(number: Int? = null): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
+        try {
+            val targetNumber = number ?: run {
+                val listResp = api.getWeeklySeriesList()
+                if (listResp.code != 0) {
+                    return@withContext Result.failure(Exception(listResp.message.ifBlank { "每周必看列表加载失败(${listResp.code})" }))
+                }
+                val latest = listResp.data?.list
+                    ?.map { it.number }
+                    ?.maxOrNull()
+                latest ?: 1
+            }
+            val resp = api.getWeeklySeriesVideos(number = targetNumber)
+            if (resp.code != 0) {
+                return@withContext Result.failure(Exception(resp.message.ifBlank { "每周必看加载失败(${resp.code})" }))
+            }
+            val list = resp.data?.list
+                ?.map { it.toVideoItem() }
+                ?.filter { it.bvid.isNotEmpty() }
+                ?: emptyList()
+            Result.success(list)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
     
     //  [新增] 分区视频（按分类 ID 获取视频）
     suspend fun getRegionVideos(tid: Int, page: Int = 1): Result<List<VideoItem>> = withContext(Dispatchers.IO) {

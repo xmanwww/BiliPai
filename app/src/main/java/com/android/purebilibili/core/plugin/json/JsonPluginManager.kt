@@ -72,36 +72,8 @@ object JsonPluginManager {
         return withContext(Dispatchers.IO) {
             try {
                 val normalizedUrl = url.trim()
-                validateImportUrl(normalizedUrl).onFailure { return@withContext Result.failure(it) }
-                Logger.d(TAG, " 下载插件: $normalizedUrl")
-
-                val request = Request.Builder()
-                    .url(normalizedUrl)
-                    .build()
-
-                val content = httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext Result.failure(
-                            Exception("下载失败: HTTP ${response.code} ${response.message}")
-                        )
-                    }
-                    response.body?.string()
-                        ?: return@withContext Result.failure(Exception("服务器返回空内容"))
-                }
-
-                Logger.d(TAG, "📄 下载内容长度: ${content.length}")
-
-                val plugin = try {
-                    json.decodeFromString<JsonRulePlugin>(content)
-                } catch (e: Exception) {
-                    Logger.e(TAG, " JSON 解析失败", e)
-                    return@withContext Result.failure(
-                        Exception("JSON 解析失败: ${e.message?.take(100)}")
-                    )
-                }
-
-                validatePlugin(plugin)?.let { error ->
-                    return@withContext Result.failure(Exception(error))
+                val plugin = fetchPluginFromUrl(normalizedUrl).getOrElse { error ->
+                    return@withContext Result.failure(error)
                 }
 
                 val existing = _plugins.value.find { it.plugin.id == plugin.id }
@@ -132,6 +104,30 @@ object JsonPluginManager {
             } catch (e: Exception) {
                 Logger.e(TAG, " 导入失败", e)
                 Result.failure(Exception("导入失败: ${e.message?.take(100)}"))
+            }
+        }
+    }
+
+    /**
+     * 从 URL 预览插件（不落盘）
+     */
+    suspend fun previewFromUrl(url: String): Result<JsonRulePlugin> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val normalizedUrl = url.trim()
+                fetchPluginFromUrl(normalizedUrl)
+            } catch (e: java.net.SocketTimeoutException) {
+                Logger.e(TAG, " 连接超时", e)
+                Result.failure(Exception("连接超时，请检查网络或 URL 是否正确"))
+            } catch (e: java.net.UnknownHostException) {
+                Logger.e(TAG, " 无法解析主机", e)
+                Result.failure(Exception("无法连接服务器，请检查 URL"))
+            } catch (e: java.io.IOException) {
+                Logger.e(TAG, " 网络错误", e)
+                Result.failure(Exception("网络错误: ${e.message}"))
+            } catch (e: Exception) {
+                Logger.e(TAG, " 预览失败", e)
+                Result.failure(Exception("预览失败: ${e.message?.take(100)}"))
             }
         }
     }
@@ -334,6 +330,42 @@ object JsonPluginManager {
     }
     
     // ============ 私有方法 ============
+
+    private fun fetchPluginFromUrl(normalizedUrl: String): Result<JsonRulePlugin> {
+        validateImportUrl(normalizedUrl).onFailure { return Result.failure(it) }
+        Logger.d(TAG, " 下载插件: $normalizedUrl")
+
+        val request = Request.Builder()
+            .url(normalizedUrl)
+            .build()
+
+        val content = httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                return Result.failure(
+                    Exception("下载失败: HTTP ${response.code} ${response.message}")
+                )
+            }
+            response.body?.string()
+                ?: return Result.failure(Exception("服务器返回空内容"))
+        }
+
+        Logger.d(TAG, "📄 下载内容长度: ${content.length}")
+
+        val plugin = try {
+            json.decodeFromString<JsonRulePlugin>(content)
+        } catch (e: Exception) {
+            Logger.e(TAG, " JSON 解析失败", e)
+            return Result.failure(
+                Exception("JSON 解析失败: ${e.message?.take(100)}")
+            )
+        }
+
+        validatePlugin(plugin)?.let { error ->
+            return Result.failure(Exception(error))
+        }
+
+        return Result.success(plugin)
+    }
 
     private fun validateImportUrl(url: String): Result<Unit> {
         if (url.isBlank()) return Result.failure(Exception("请输入插件链接"))

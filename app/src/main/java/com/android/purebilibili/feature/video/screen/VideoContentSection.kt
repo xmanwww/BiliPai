@@ -120,7 +120,10 @@ fun VideoContentSection(
     favoriteFolderDialogVisible: Boolean = false,
     favoriteFolders: List<com.android.purebilibili.data.model.response.FavFolder> = emptyList(),
     isFavoriteFoldersLoading: Boolean = false,
-    onFavoriteFolderClick: (com.android.purebilibili.data.model.response.FavFolder) -> Unit = {},
+    selectedFavoriteFolderIds: Set<Long> = emptySet(),
+    isSavingFavoriteFolders: Boolean = false,
+    onFavoriteFolderToggle: (com.android.purebilibili.data.model.response.FavFolder) -> Unit = {},
+    onSaveFavoriteFolders: () -> Unit = {},
     onDismissFavoriteFolderDialog: () -> Unit = {},
 
     onCreateFavoriteFolder: (String, String, Boolean) -> Unit = { _, _, _ -> },
@@ -178,7 +181,10 @@ fun VideoContentSection(
         com.android.purebilibili.feature.video.ui.components.FavoriteFolderSheet(
             folders = favoriteFolders,
             isLoading = isFavoriteFoldersLoading,
-            onFolderClick = onFavoriteFolderClick,
+            selectedFolderIds = selectedFavoriteFolderIds,
+            isSaving = isSavingFavoriteFolders,
+            onFolderToggle = onFavoriteFolderToggle,
+            onSaveClick = onSaveFavoriteFolders,
             onDismissRequest = onDismissFavoriteFolderDialog,
             onCreateFolder = onCreateFavoriteFolder
         )

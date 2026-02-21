@@ -78,7 +78,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val isRefreshing = _isRefreshing.asStateFlow()
 
     private var refreshIdx = 0
-    private var popularPage = 1  //  热门视频分页
     private var livePage = 1     //  直播分页
     private var hasMoreLiveData = true  //  是否还有更多直播数据
     private var incrementalTimelineRefreshEnabled = false
@@ -533,6 +532,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             fetchLiveRooms(isLoadMore = false)
         }
     }
+
+    fun switchPopularSubCategory(subCategory: PopularSubCategory) {
+        if (_uiState.value.popularSubCategory == subCategory) return
+        val current = _uiState.value
+        _uiState.value = current.copy(popularSubCategory = subCategory)
+        updateCategoryState(HomeCategory.POPULAR) { oldState ->
+            oldState.copy(
+                videos = emptyList(),
+                isLoading = current.currentCategory == HomeCategory.POPULAR,
+                error = null,
+                pageIndex = 1,
+                hasMore = supportsPopularLoadMore(subCategory)
+            )
+        }
+
+        if (current.currentCategory == HomeCategory.POPULAR) {
+            viewModelScope.launch {
+                fetchData(isLoadMore = false)
+            }
+        }
+    }
     
     //  [新增] 添加到稍后再看
     fun addToWatchLater(bvid: String, aid: Long) {
@@ -678,6 +698,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val categoryState = _uiState.value.categoryStates[currentCategory] ?: return
         
         if (categoryState.isLoading || _isRefreshing.value || !categoryState.hasMore) return
+        if (currentCategory == HomeCategory.POPULAR &&
+            !supportsPopularLoadMore(_uiState.value.popularSubCategory)
+        ) {
+            return
+        }
         
         //  修复：如果是直播分类且没有更多数据，不再加载
         if (currentCategory == HomeCategory.LIVE && !hasMoreLiveData) {
@@ -716,7 +741,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         //  视频类分类处理
         val videoResult = when (currentCategory) {
             HomeCategory.RECOMMEND -> VideoRepository.getHomeVideos(if (isLoadMore) refreshIdx + 1 else 0) // Recommend uses idx, slightly different
-            HomeCategory.POPULAR -> VideoRepository.getPopularVideos(pageToFetch)
+            HomeCategory.POPULAR -> {
+                when (_uiState.value.popularSubCategory) {
+                    PopularSubCategory.COMPREHENSIVE -> VideoRepository.getPopularVideos(pageToFetch)
+                    PopularSubCategory.RANKING -> VideoRepository.getRankingVideos(rid = 0, type = "all")
+                    PopularSubCategory.WEEKLY -> VideoRepository.getWeeklyMustWatchVideos()
+                    PopularSubCategory.PRECIOUS -> VideoRepository.getPreciousVideos()
+                }
+            }
             else -> {
                 //  Generic categories (Game, Tech, etc.)
                 if (currentCategory.tid > 0) {
@@ -750,12 +782,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             // Existing logic had a single sessionSeenBvids.
             
             val uniqueNewVideos = if (currentCategory == HomeCategory.RECOMMEND) {
-                 filteredVideos.filter { it.bvid !in sessionSeenBvids }
+                filteredVideos.filter { it.bvid !in sessionSeenBvids }
             } else {
-                 filteredVideos // Other categories usually have fixed lists, but let's deduplicate against themselves if needed. 
-                 // Actually, region videos might have duplicates if pages overlap?
-                 // Let's just stick to sessionSeenBvids if we want to avoid seeing same video anywhere.
-                 filteredVideos.filter { it.bvid !in sessionSeenBvids }
+                filteredVideos
             }
             
             val useIncrementalRecommendRefresh = !isLoadMore &&
@@ -768,7 +797,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 uniqueNewVideos
             }
 
-            sessionSeenBvids.addAll(incomingVideos.map { it.bvid })
+            if (currentCategory == HomeCategory.RECOMMEND) {
+                sessionSeenBvids.addAll(incomingVideos.map { it.bvid })
+            }
             
             if (incomingVideos.isNotEmpty() || useIncrementalRecommendRefresh) {
                 var addedCount = 0
@@ -789,7 +820,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         isLoading = false,
                         error = null,
                         pageIndex = if (isLoadMore) oldState.pageIndex + 1 else if (useIncrementalRecommendRefresh) oldState.pageIndex else 1,
-                        hasMore = true
+                        hasMore = if (currentCategory == HomeCategory.POPULAR) {
+                            supportsPopularLoadMore(_uiState.value.popularSubCategory)
+                        } else {
+                            true
+                        }
                     )
                 }
 

@@ -529,7 +529,7 @@ fun AppearanceSettingsContent(
                             "Blue", "icon_blue" -> "经典蓝"
                             "Retro", "icon_retro" -> "复古怀旧"
                             "Flat", "icon_flat" -> "扁平现代"
-                            "Flat Material" -> "扁平材质"
+                            "Flat Material", "icon_flat_material" -> "扁平材质"
                             "Neon", "icon_neon" -> "霓虹"
                             "Telegram Blue", "icon_telegram_blue" -> "纸飞机蓝"
                             "Pink", "icon_telegram_pink" -> "樱花粉"

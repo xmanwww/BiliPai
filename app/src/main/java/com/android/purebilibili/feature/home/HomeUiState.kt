@@ -50,6 +50,13 @@ enum class LiveSubCategory(val label: String) {
     POPULAR("热门")
 }
 
+enum class PopularSubCategory(val label: String) {
+    COMPREHENSIVE("综合热门"),
+    RANKING("排行榜"),
+    WEEKLY("每周必看"),
+    PRECIOUS("入站必刷")
+}
+
 enum class TodayWatchMode(val label: String) {
     RELAX("今晚轻松看"),
     LEARN("深度学习看")
@@ -117,6 +124,7 @@ data class HomeUiState(
     val user: UserState = UserState(),
     val currentCategory: HomeCategory = HomeCategory.RECOMMEND,
     val liveSubCategory: LiveSubCategory = LiveSubCategory.FOLLOWED,
+    val popularSubCategory: PopularSubCategory = PopularSubCategory.COMPREHENSIVE,
     val refreshKey: Long = 0L,
     val followingMids: Set<Long> = emptySet(),
     //  [新增] 标签页显示索引（独立于内容分类，用于特殊分类导航后保持标签位置）

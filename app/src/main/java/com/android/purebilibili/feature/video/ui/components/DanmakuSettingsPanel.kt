@@ -57,6 +57,8 @@ fun DanmakuSettingsPanel(
     allowBottom: Boolean = true,
     allowColorful: Boolean = true,
     allowSpecial: Boolean = true,
+    showBlockRuleEditor: Boolean = false,
+    blockRulesRaw: String = "",
     smartOcclusion: Boolean = true,
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
     smartOcclusionDownloadProgress: Int? = null,
@@ -70,6 +72,7 @@ fun DanmakuSettingsPanel(
     onAllowBottomChange: (Boolean) -> Unit = {},
     onAllowColorfulChange: (Boolean) -> Unit = {},
     onAllowSpecialChange: (Boolean) -> Unit = {},
+    onBlockRulesRawChange: (String) -> Unit = {},
     onSmartOcclusionChange: (Boolean) -> Unit = {},
     onSmartOcclusionDownloadClick: () -> Unit = {},
     onDismiss: () -> Unit
@@ -374,6 +377,55 @@ fun DanmakuSettingsPanel(
                             onCheckedChange = onAllowSpecialChange,
                             showDivider = false
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (showBlockRuleEditor) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = CardBackground,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "自定义屏蔽词",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "每行一个，支持普通关键词与正则：regex:xxx / re:xxx / /xxx/",
+                                color = Color.White.copy(0.5f),
+                                fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = blockRulesRaw,
+                                onValueChange = onBlockRulesRawChange,
+                                placeholder = {
+                                    Text(
+                                        text = "例如：剧透\\nregex:第\\\\d+集\\n/哈{3,}/",
+                                        color = Color.White.copy(0.35f),
+                                        fontSize = 12.sp
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 3,
+                                maxLines = 6,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                    focusedContainerColor = Color.White.copy(alpha = 0.02f),
+                                    unfocusedContainerColor = Color.White.copy(alpha = 0.02f)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
                     }
                 }
             }

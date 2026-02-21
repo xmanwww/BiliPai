@@ -223,6 +223,7 @@ data class PopularData(
 
 @Serializable
 data class PopularItem(
+    val aid: Long = 0,
     val bvid: String = "",
     val cid: Long = 0,
     val pic: String = "",
@@ -233,10 +234,11 @@ data class PopularItem(
     val stat: PopularStat = PopularStat()
 ) {
     fun toVideoItem(): VideoItem {
+        val resolvedAid = if (aid > 0) aid else cid
         return VideoItem(
-            id = cid,
+            id = resolvedAid,
             bvid = bvid,
-            aid = cid,  // [修复] PopularItem 的 cid 实际是 aid
+            aid = resolvedAid,
             cid = cid,
             title = title,
             pic = pic,
@@ -256,6 +258,87 @@ data class PopularStat(
     val coin: Int = 0,
     val favorite: Int = 0,
     val share: Int = 0
+)
+
+@Serializable
+data class RankingResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: RankingData? = null
+)
+
+@Serializable
+data class RankingData(
+    val note: String = "",
+    val list: List<PopularItem>? = null
+)
+
+@Serializable
+data class PopularPreciousResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: PopularPreciousData? = null
+)
+
+@Serializable
+data class PopularPreciousData(
+    val title: String = "",
+    val media_id: Long = 0,
+    val explain: String = "",
+    val list: List<PopularItem>? = null
+)
+
+@Serializable
+data class PopularSeriesListResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: PopularSeriesListData? = null
+)
+
+@Serializable
+data class PopularSeriesListData(
+    val list: List<PopularSeriesPeriod>? = null
+)
+
+@Serializable
+data class PopularSeriesPeriod(
+    val number: Int = 0,
+    val subject: String = "",
+    val status: Int = 0,
+    val name: String = ""
+)
+
+@Serializable
+data class PopularSeriesOneResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: PopularSeriesOneData? = null
+)
+
+@Serializable
+data class PopularSeriesOneData(
+    val config: PopularSeriesConfig? = null,
+    val reminder: String = "",
+    val list: List<PopularItem>? = null
+)
+
+@Serializable
+data class PopularSeriesConfig(
+    val id: Long = 0,
+    val type: String = "",
+    val number: Int = 0,
+    val subject: String = "",
+    val stime: Long = 0,
+    val etime: Long = 0,
+    val status: Int = 0,
+    val name: String = "",
+    val label: String = "",
+    val hint: String = "",
+    val color: Int = 0,
+    val cover: String = "",
+    val share_title: String = "",
+    val share_subtitle: String = "",
+    val media_id: Long = 0
 )
 
 // --- 5. 分区视频 Response ---

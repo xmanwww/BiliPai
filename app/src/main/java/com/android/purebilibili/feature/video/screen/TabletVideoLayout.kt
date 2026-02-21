@@ -222,7 +222,7 @@ fun TabletVideoLayout(
                         videoTags = success.videoTags,
                         relatedVideos = success.related,
                         onFollowClick = { viewModel.toggleFollow() },
-                        onFavoriteClick = { viewModel.toggleFavorite() },
+                        onFavoriteClick = { viewModel.showFavoriteFolderDialog() },
                         onLikeClick = { viewModel.toggleLike() },
                         onCoinClick = { viewModel.openCoinDialog() },
                         onTripleClick = { viewModel.doTripleAction() },
