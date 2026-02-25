@@ -344,28 +344,40 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ---
 
+## 📚 Wiki
+
+- Wiki Home: [`docs/wiki/README.md`](docs/wiki/README.md)
+- Feature Matrix: [`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)
+- Architecture: [`docs/wiki/ARCHITECTURE.md`](docs/wiki/ARCHITECTURE.md)
+- Release Workflow: [`docs/wiki/RELEASE_WORKFLOW.md`](docs/wiki/RELEASE_WORKFLOW.md)
+- QA Checklist: [`docs/wiki/QA.md`](docs/wiki/QA.md)
+
+---
+
 ## 🗺️ Roadmap
 
 ### ✅ Completed
 
 - [x] Home Waterfall Feed
-- [x] Video Player + Danmaku + Gestures
+- [x] Video Player + Danmaku + Gestures + PiP + Background Play
+- [x] Audio Mode + Favorites/Watch Later playlist + Sequential/Shuffle/Repeat-one
 - [x] Anime/Movie Playback
 - [x] Live Streaming
-- [x] Dynamic Feed
+- [x] Dynamic Feed (with fast-switch stability improvements)
 - [x] Offline Download
-- [x] Search + History
+- [x] Search + History (with bulk delete)
 - [x] Material You + Dark Mode
-- [x] TV Login (High Quality)
-- [x] Shared Element Transitions
+- [x] TV Login + first-play quality auth fixes for logged-in non-premium users
+- [x] Landscape player controls upgrade (subtitle panel + more panel + play-order quick switch)
+- [x] Shared Element Transitions + return-to-home animation optimization
+- [x] Tablet/Foldable Support (sidebar + bottom bar layout)
 - [x] Plugin System Core
 - [x] Built-in Plugins
 
 ### 🚧 WIP
 
-- [ ] Danmaku Sending
-- [x] Tablet/Foldable Support (Basic)
 - [ ] In-app Update
+- [ ] Wiki and module-level documentation expansion
 
 ### 📋 Planned
 

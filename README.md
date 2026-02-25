@@ -491,6 +491,16 @@ app/src/main/java/com/android/purebilibili
 
 ---
 
+## 📚 Wiki
+
+- Wiki 首页：[`docs/wiki/README.md`](docs/wiki/README.md)
+- 功能矩阵：[`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)
+- 架构说明：[`docs/wiki/ARCHITECTURE.md`](docs/wiki/ARCHITECTURE.md)
+- 发布流程：[`docs/wiki/RELEASE_WORKFLOW.md`](docs/wiki/RELEASE_WORKFLOW.md)
+- QA 手册：[`docs/wiki/QA.md`](docs/wiki/QA.md)
+
+---
+
 ## 🗺️ 路线图
 
 > [!TIP]
@@ -499,24 +509,26 @@ app/src/main/java/com/android/purebilibili
 ### ✅ 已完成功能
 
 - [x] 首页推荐流 + 瀑布流布局
-- [x] 视频播放 + 弹幕 + 手势控制
+- [x] 视频播放 + 弹幕 + 手势控制 + 画中画 + 后台播放
+- [x] 听视频模式 + 收藏夹/稍后再看播放列表 + 顺序/随机/单曲循环
 - [x] 番剧/影视播放 + 选集面板
 - [x] 直播播放 + 分区浏览
-- [x] 动态页面 + 图片下载 + GIF 支持
+- [x] 动态页面 + 图片下载 + GIF 支持 + 多 UP 切换稳定性修复
 - [x] 离线下载 + 本地播放
-- [x] 搜索 + 历史记录
+- [x] 搜索 + 历史记录（含批量删除）
 - [x] Material You + 深色模式
-- [x] 高画质扫码登录 (解锁高画质)
-- [x] 共享元素过渡动画
+- [x] 高画质扫码登录 + 首播清晰度鉴权修复（非大会员首次 720P 回退问题）
+- [x] 横屏控制栏增强（字幕面板 / 更多面板 / 播放顺序快捷切换）
+- [x] 共享元素过渡动画 + 返回首页动效优化
+- [x] 平板/折叠屏适配（侧边栏 + 底栏布局）
 - [x] 插件系统核心架构
 - [x] 内置插件 (空降助手 / 去广告 / 弹幕增强 / 夜间护眼 / 今日推荐单)
 - [x] Firebase Analytics + Crashlytics（支持用户行为统计与崩溃追踪）
 
 ### 🚧 开发中
 
-- [x] 弹幕发送功能
-- [x] 平板/折叠屏适配 (侧边栏+底栏优化)
 - [ ] 应用内更新检测
+- [ ] 文档站与 Wiki 持续补全（模块 API / 调试手册 / 回归清单）
 
 ### 📋 计划中
 

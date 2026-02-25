@@ -79,4 +79,10 @@ docs/plans/
 **/docs/plans/
 *.md
 !README.md
+!README_EN.md
 !AGENTS.md
+!CHANGELOG.md
+!docs/
+docs/*
+!docs/wiki/
+!docs/wiki/*.md
