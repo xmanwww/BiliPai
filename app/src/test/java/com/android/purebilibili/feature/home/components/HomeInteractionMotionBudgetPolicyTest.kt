@@ -80,6 +80,35 @@ class HomeInteractionMotionBudgetPolicyTest {
     }
 
     @Test
+    fun collapsedTopTabs_disableViewportSync() {
+        assertFalse(
+            resolveHomeTopTabViewportSyncEnabled(
+                currentTabHeightDp = 0f,
+                tabAlpha = 1f,
+                tabContentAlpha = 1f
+            )
+        )
+        assertFalse(
+            resolveHomeTopTabViewportSyncEnabled(
+                currentTabHeightDp = 52f,
+                tabAlpha = 0f,
+                tabContentAlpha = 1f
+            )
+        )
+    }
+
+    @Test
+    fun visibleTopTabs_keepViewportSyncEnabled() {
+        assertTrue(
+            resolveHomeTopTabViewportSyncEnabled(
+                currentTabHeightDp = 52f,
+                tabAlpha = 1f,
+                tabContentAlpha = 1f
+            )
+        )
+    }
+
+    @Test
     fun topTabTapPolicy_usesImmediatePageSwitchWhenTargetChanges() {
         assertTrue(shouldSnapHomeTopTabSelection(currentPage = 0, targetPage = 1))
         assertFalse(shouldSnapHomeTopTabSelection(currentPage = 2, targetPage = 2))

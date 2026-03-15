@@ -305,7 +305,8 @@ fun CategoryTabRow(
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
     backdrop: LayerBackdrop? = null,
     isFloatingStyle: Boolean = false,
-    interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL
+    interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL,
+    isViewportSyncEnabled: Boolean = true
 ) {
     val visualTuning = remember { resolveTopTabVisualTuning() }
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -402,6 +403,9 @@ fun CategoryTabRow(
             }
 
             LaunchedEffect(viewportAnchorIndex, interactionBudget, firstVisibleIndex, lastVisibleIndex) {
+                if (!isViewportSyncEnabled) {
+                    return@LaunchedEffect
+                }
                 val targetIndex = viewportAnchorIndex.coerceIn(0, categories.size - 1)
                 if (!shouldAnimateTopTabAutoScroll(targetIndex, firstVisibleIndex, lastVisibleIndex, interactionBudget)) {
                     return@LaunchedEffect

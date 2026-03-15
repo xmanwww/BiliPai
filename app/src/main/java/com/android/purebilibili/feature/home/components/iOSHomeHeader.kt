@@ -773,6 +773,11 @@ fun iOSHomeHeader(
         animationSpec = tween(durationMillis = 180),
         label = "tabContentAlpha"
     )
+    val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
+        currentTabHeightDp = currentTabHeight.value,
+        tabAlpha = tabAlpha,
+        tabContentAlpha = tabContentAlpha
+    )
     val tabBorderAlpha = if (isTabFloating) tabChromeStyle.borderAlpha else 0f
 
     Box(
@@ -1043,29 +1048,28 @@ fun iOSHomeHeader(
                     softenWideChrome = true
                 )
             ) {
-                if (tabContentAlpha > 0.01f) {
-                    CategoryTabRow(
-                        categories = topCategories,
-                        selectedIndex = categoryIndex,
-                        onCategorySelected = { index ->
-                            if (topTabsVisible) onCategorySelected(index)
-                        },
-                        onPartitionClick = {
-                            if (topTabsVisible) onPartitionClick()
-                        },
-                        onLiveClick = {
-                            if (topTabsVisible) onLiveClick()
-                        },
-                        pagerState = pagerState,
-                        labelMode = homeSettings?.topTabLabelMode
-                            ?: com.android.purebilibili.core.store.SettingsManager.TopTabLabelMode.TEXT_ONLY,
-                        isLiquidGlassEnabled = effectiveTabMaterialMode == TopTabMaterialMode.LIQUID_GLASS && isGlassSupported,
-                        liquidGlassStyle = liquidStyle,
-                        backdrop = backdrop,
-                        isFloatingStyle = isTabFloating,
-                        interactionBudget = interactionBudget
-                    )
-                }
+                CategoryTabRow(
+                    categories = topCategories,
+                    selectedIndex = categoryIndex,
+                    onCategorySelected = { index ->
+                        if (topTabsVisible) onCategorySelected(index)
+                    },
+                    onPartitionClick = {
+                        if (topTabsVisible) onPartitionClick()
+                    },
+                    onLiveClick = {
+                        if (topTabsVisible) onLiveClick()
+                    },
+                    pagerState = pagerState,
+                    labelMode = homeSettings?.topTabLabelMode
+                        ?: com.android.purebilibili.core.store.SettingsManager.TopTabLabelMode.TEXT_ONLY,
+                    isLiquidGlassEnabled = effectiveTabMaterialMode == TopTabMaterialMode.LIQUID_GLASS && isGlassSupported,
+                    liquidGlassStyle = liquidStyle,
+                    backdrop = backdrop,
+                    isFloatingStyle = isTabFloating,
+                    interactionBudget = interactionBudget,
+                    isViewportSyncEnabled = isTopTabViewportSyncEnabled
+                )
             }
         }
     }

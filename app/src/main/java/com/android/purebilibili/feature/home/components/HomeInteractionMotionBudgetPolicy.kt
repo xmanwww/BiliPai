@@ -9,6 +9,18 @@ enum class HomeInteractionMotionBudget {
     REDUCED
 }
 
+internal fun resolveHomeTopTabViewportSyncEnabled(
+    currentTabHeightDp: Float,
+    tabAlpha: Float,
+    tabContentAlpha: Float,
+    minVisibleHeightDp: Float = 1f,
+    minVisibleAlpha: Float = 0.01f
+): Boolean {
+    return currentTabHeightDp > minVisibleHeightDp &&
+        tabAlpha > minVisibleAlpha &&
+        tabContentAlpha > minVisibleAlpha
+}
+
 internal fun resolveHomeInteractionMotionBudget(
     isPagerScrolling: Boolean,
     isProgrammaticPageSwitchInProgress: Boolean,
