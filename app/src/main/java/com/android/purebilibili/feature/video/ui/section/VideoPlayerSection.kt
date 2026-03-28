@@ -1115,11 +1115,10 @@ fun VideoPlayerSection(
                 if (playbackState == Player.STATE_BUFFERING) {
                     if (bufferingStartedAtMs == 0L) {
                         bufferingStartedAtMs = now
-                        Logger.d(
-                            "VideoPlayerSection",
+                        Logger.d("VideoPlayerSection") {
                             "🎬 Playback buffering started: pos=${playerState.player.currentPosition}, " +
                                 "buffered=${playerState.player.bufferedPosition}, playWhenReady=${playerState.player.playWhenReady}"
-                        )
+                        }
                     }
                 } else if (bufferingStartedAtMs != 0L) {
                     val bufferingDurationMs = (now - bufferingStartedAtMs).coerceAtLeast(0L)
@@ -2031,10 +2030,9 @@ fun VideoPlayerSection(
             if (shouldRebindSurface) {
                 playerViewRef?.let { playerView ->
                     rebindPlayerSurfaceIfNeeded(playerView = playerView, player = player)
-                    Logger.d(
-                        "VideoPlayerSection",
+                    Logger.d("VideoPlayerSection") {
                         "🎬 Foreground surface rebind applied to avoid audio-only resume"
-                    )
+                    }
                 }
             }
             if (shouldKickPlaybackAfterSurfaceRecovery(
@@ -2067,11 +2065,10 @@ fun VideoPlayerSection(
             val player = playerState.player
             playerViewRef?.let { playerView ->
                 rebindPlayerSurfaceIfNeeded(playerView = playerView, player = player)
-                Logger.d(
-                    "VideoPlayerSection",
+                Logger.d("VideoPlayerSection") {
                     "🎬 Foreground recovery retry: surface=${playerView.videoSurfaceView?.javaClass?.simpleName}, " +
                         "pos=${player.currentPosition}, state=${player.playbackState}, playing=${player.isPlaying}"
-                )
+                }
             }
             if (shouldKickPlaybackAfterSurfaceRecovery(
                     playWhenReady = player.playWhenReady,
@@ -2080,10 +2077,9 @@ fun VideoPlayerSection(
                 )
             ) {
                 player.play()
-                Logger.d(
-                    "VideoPlayerSection",
+                Logger.d("VideoPlayerSection") {
                     "▶️ Foreground recovery kicked playback to rebuild render chain"
-                )
+                }
             }
 
             delay(FOREGROUND_SURFACE_RECOVERY_TIMEOUT_MS)
@@ -2269,12 +2265,11 @@ fun VideoPlayerSection(
                         foregroundRecoveryStartedAtMs = android.os.SystemClock.elapsedRealtime()
                         foregroundRecoveryStartPositionMs = player.currentPosition.coerceAtLeast(0L)
                         hasRenderedFirstFrameSinceForegroundRecovery = false
-                        Logger.d(
-                            "VideoPlayerSection",
+                        Logger.d("VideoPlayerSection") {
                             "🌅 ON_RESUME recovery start: pos=${player.currentPosition}, buffered=${player.bufferedPosition}, " +
                                 "state=${player.playbackState}, playing=${player.isPlaying}, playWhenReady=${player.playWhenReady}, " +
                                 "surface=${playerViewRef?.videoSurfaceView?.javaClass?.simpleName}"
-                        )
+                        }
                         val shouldRebindSurface = shouldRebindPlayerSurfaceOnForeground(
                             hasPlayerView = playerViewRef != null,
                             isInPipMode = isInPipMode,
@@ -2284,10 +2279,9 @@ fun VideoPlayerSection(
                         if (shouldRebindSurface) {
                             playerViewRef?.let { playerView ->
                                 rebindPlayerSurfaceIfNeeded(playerView = playerView, player = player)
-                                Logger.d(
-                                    "VideoPlayerSection",
+                                Logger.d("VideoPlayerSection") {
                                     "🎬 ON_RESUME surface rebind applied"
-                                )
+                                }
                             }
                         }
                         if (shouldKickPlaybackAfterSurfaceRecovery(
@@ -2297,10 +2291,9 @@ fun VideoPlayerSection(
                             )
                         ) {
                             player.play()
-                            Logger.d(
-                                "VideoPlayerSection",
+                            Logger.d("VideoPlayerSection") {
                                 "▶️ ON_RESUME kicked playback after surface recovery"
-                            )
+                            }
                         }
                     }
                     androidx.lifecycle.Lifecycle.Event.ON_DESTROY -> {
@@ -2427,11 +2420,10 @@ fun VideoPlayerSection(
                     hasRenderedFirstFrameSinceForegroundRecovery = true
                     val costMs = (android.os.SystemClock.elapsedRealtime() - foregroundRecoveryStartedAtMs)
                         .coerceAtLeast(0L)
-                    Logger.d(
-                        "VideoPlayerSection",
+                    Logger.d("VideoPlayerSection") {
                         "✅ Foreground recovery first frame rendered in ${costMs}ms: " +
                             "pos=${playerState.player.currentPosition}, buffered=${playerState.player.bufferedPosition}"
-                    )
+                    }
                 }
             }
             
@@ -2444,11 +2436,10 @@ fun VideoPlayerSection(
                         hasRenderedFirstFrameSinceForegroundRecovery = true
                         val costMs = (android.os.SystemClock.elapsedRealtime() - foregroundRecoveryStartedAtMs)
                             .coerceAtLeast(0L)
-                        Logger.d(
-                            "VideoPlayerSection",
+                        Logger.d("VideoPlayerSection") {
                             "✅ Foreground recovery first frame event received in ${costMs}ms: " +
                                 "pos=${playerState.player.currentPosition}, buffered=${playerState.player.bufferedPosition}"
-                        )
+                        }
                     }
                 }
             }
