@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-03 · Synced to v7.3.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-05 · Synced to v7.4.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.3.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.4.3-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -100,7 +100,7 @@
   - schedule + usage reminders + snooze
   - improved humane reminder copy and pacing strategy
 - `Quality Switching`:
-  - switchable quality list now prioritizes real DASH tracks
+  - quality options now follow the API list, while real DASH tracks decide which tiers stay switchable
   - cache switching requires exact target quality match; falls back to API when missing
   - clearer fallback toast when requested quality is unavailable
 
@@ -388,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-03 (v7.3.3). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-05 (v7.4.3). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -430,15 +430,14 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.3.3 · 2026-04-02)
+### Latest (v7.4.3 · 2026-04-05)
 
-- 🔒 **Privacy defaults tightened further**: crash tracking stays enabled by default, usage analytics is disabled by default, and player diagnostic logging remains available for black-screen, stutter, and quality-switch troubleshooting.
-- 🪵 **Ordinary runtime logs no longer persist by default**: warnings and errors can still feed crash snapshots and manual exports, but everyday runtime logs are no longer written to `runtime.log` automatically.
-- 🕵️ **Analytics and Crashlytics are further redacted**: no more uploading video IDs, live room IDs, season IDs, target user IDs, titles, or uploader names; Crashlytics also no longer binds `mid` or stores live-room titles and anchor names.
-- 🎬 **Quality switching and playback history are more stable**: premium quality switching now shows a cooldown hint instead of walking into a dead end, and playback heartbeat reports more accurate session start time, real watch time, and final progress.
-- 🎚️ **Seek and playback-button feedback feel more natural**: scrubbing now preserves the user intent captured at interaction start, and the center play button keeps a more reasonable playing state while playback is resuming through buffering.
-- 💬 **Comment badges and long-press menus are refined**: comment level badges now use more PiliPlus-like pixel assets including a dedicated senior level-6 badge, and video-card long-press menus appear closer to the actual press location.
-- 📥 **Range-download validation is stricter**: multi-thread downloads now verify `206 Partial Content` responses and matching ranges, then fall back to single-thread download when the server responds incorrectly.
+- 🎯 **Seek, quality switching, and buffering feedback are more reliable**: danmaku no longer freezes after scrubbing back, and quality-switch / seek buffering now show a clearer loading state with bandwidth feedback.
+- 🖼️ **Seek preview thumbnails track your finger again**: the preview frame follows the live scrub target instead of lagging behind the displayed position.
+- 🧹 **Cache cleanup is now selectable**: users can clear playback-quality, network, preview-image, subtitle/danmaku, temp/log, and app metadata caches independently.
+- 🔢 **The cache number now matches the selected options**: the dialog shows “selected cache” and updates immediately when checkboxes change.
+- 📚 **Collection UX is stronger**: collection entry points and sheets now support subscriptions plus ascending, descending, and recent-first sorting.
+- ◼️ **Android Native home chrome is softer**: the top unified panel now uses a subtle radius instead of hard square corners.
 
 ---
 
