@@ -95,6 +95,7 @@ import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
@@ -126,11 +127,13 @@ import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackEndAction
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal data class PortraitVideoInteractionOverride(
@@ -225,9 +228,18 @@ fun PortraitVideoPager(
         .getPlaybackCompletionBehavior(context)
         .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
     val isExternalPlaylist by PlaylistManager.isExternalPlaylist.collectAsState()
+    val recommendationShuffleSeed = remember(initialInfo.bvid, initialInfo.aid) {
+        resolvePortraitRecommendationShuffleSeed(
+            initialBvid = initialInfo.bvid,
+            initialAid = initialInfo.aid
+        )
+    }
 
-    val baseRecommendations = remember(recommendations) {
-        recommendations.distinctBy { it.bvid }
+    val baseRecommendations = remember(recommendations, recommendationShuffleSeed) {
+        shufflePortraitRecommendations(
+            seed = recommendationShuffleSeed,
+            recommendations = recommendations
+        )
     }
     val initialPageIndex = remember(initialBvid, initialInfo.bvid, baseRecommendations) {
         resolvePortraitInitialPageIndex(
@@ -257,6 +269,7 @@ fun PortraitVideoPager(
     var watchLaterVideos by remember { mutableStateOf<List<RelatedVideo>>(emptyList()) }
     var isLoadingMoreRecommendations by remember { mutableStateOf(false) }
     val appendedRecommendationSeeds = remember { mutableStateListOf<String>() }
+    var recommendationFeedCursor by rememberSaveable(initialInfo.bvid) { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         if (TokenManager.sessDataCache.isNullOrEmpty()) {
@@ -279,21 +292,55 @@ fun PortraitVideoPager(
 
     LaunchedEffect(watchLaterVideos) {
         if (watchLaterVideos.isEmpty()) return@LaunchedEffect
-        val existingBvids = pageItems.mapNotNull {
-            when (it) {
-                is ViewInfo -> it.bvid
-                is RelatedVideo -> it.bvid
-                else -> null
-            }
-        }.toSet()
+        val existingBvids = withContext(Dispatchers.Main.immediate) {
+            snapshotPortraitPageBvids(pageItems)
+        }
         val appendItems = watchLaterVideos.filter { it.bvid !in existingBvids }
         if (appendItems.isNotEmpty()) {
-            pageItems.addAll(appendItems)
+            withContext(Dispatchers.Main.immediate) {
+                pageItems.addAll(appendItems)
+            }
         }
     }
-    
+
     val pagerState = rememberPagerState(initialPage = initialPageIndex) {
         pageItems.size
+    }
+    LaunchedEffect(initialInfo.bvid) {
+        val discoveryRecommendations = VideoRepository.getHomeVideos(idx = 0)
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::toRelatedVideoForPortraitRecommendation)
+        if (discoveryRecommendations.isEmpty()) return@LaunchedEffect
+
+        val shuffledDiscoveryRecommendations = shufflePortraitRecommendations(
+            seed = resolvePortraitRecommendationAppendSeed(
+                baseSeed = recommendationShuffleSeed,
+                currentBvid = initialInfo.bvid
+            ),
+            recommendations = discoveryRecommendations
+        )
+        val insertion = withContext(Dispatchers.Main.immediate) {
+            recommendationFeedCursor = 1
+            mergePortraitRecommendationAppendItems(
+                currentBvid = initialInfo.bvid,
+                existingBvids = snapshotPortraitPageBvids(pageItems),
+                existingRecommendations = recommendationItems.toList(),
+                fetchedRecommendations = shuffledDiscoveryRecommendations
+            )
+        }
+        if (insertion.isEmpty()) return@LaunchedEffect
+
+        withContext(Dispatchers.Main.immediate) {
+            val insertNearHead = pagerState.currentPage == 0 && !pagerState.isScrollInProgress
+            if (insertNearHead) {
+                recommendationItems.addAll(0, insertion)
+                pageItems.addAll(1, insertion)
+            } else {
+                recommendationItems.addAll(insertion)
+                pageItems.addAll(insertion)
+            }
+        }
     }
     var currentPageScale by remember { mutableFloatStateOf(1f) }
 
@@ -563,25 +610,48 @@ fun PortraitVideoPager(
                     isLoadingMoreRecommendations = true
                     launch {
                         try {
-                            val existingBvids = pageItems.mapNotNull { candidate ->
-                                when (candidate) {
-                                    is ViewInfo -> candidate.bvid
-                                    is RelatedVideo -> candidate.bvid
-                                    else -> null
-                                }
-                            }.toSet()
+                            val (existingBvids, existingRecommendations, homeFeedCursor) = withContext(Dispatchers.Main.immediate) {
+                                Triple(
+                                    snapshotPortraitPageBvids(pageItems),
+                                    recommendationItems.toList(),
+                                    recommendationFeedCursor
+                                )
+                            }
+                            val homeFeedRecommendations = VideoRepository.getHomeVideos(idx = homeFeedCursor)
+                                .getOrNull()
+                                .orEmpty()
+                                .mapNotNull(::toRelatedVideoForPortraitRecommendation)
+                            withContext(Dispatchers.Main.immediate) {
+                                recommendationFeedCursor = homeFeedCursor + 1
+                            }
+                            val relatedFallbackRecommendations = if (homeFeedRecommendations.size < 8) {
+                                VideoRepository.getRelatedVideos(bvid)
+                            } else {
+                                emptyList()
+                            }
+                            val shuffledFetchedRecommendations = shufflePortraitRecommendations(
+                                seed = resolvePortraitRecommendationAppendSeed(
+                                    baseSeed = recommendationShuffleSeed,
+                                    currentBvid = bvid
+                                ),
+                                recommendations = homeFeedRecommendations + relatedFallbackRecommendations
+                            )
                             val appendItems = mergePortraitRecommendationAppendItems(
                                 currentBvid = bvid,
                                 existingBvids = existingBvids,
-                                fetchedRecommendations = com.android.purebilibili.data.repository.VideoRepository
-                                    .getRelatedVideos(bvid)
+                                existingRecommendations = existingRecommendations,
+                                fetchedRecommendations = shuffledFetchedRecommendations
                             )
                             if (appendItems.isNotEmpty()) {
-                                recommendationItems.addAll(appendItems)
-                                pageItems.addAll(appendItems)
+                                withContext(Dispatchers.Main.immediate) {
+                                    recommendationItems.addAll(appendItems)
+                                    pageItems.addAll(appendItems)
+                                }
                             }
                         } finally {
-                            isLoadingMoreRecommendations = false
+                            withContext(Dispatchers.Main.immediate) {
+                                isLoadingMoreRecommendations = false
+                            }
                         }
                     }
                 }
@@ -1839,6 +1909,8 @@ private fun VideoPageItem(
             upMid = authorMid,
             expectedReplyCount = if (isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.reply else stat.reply,
             emoteMap = currentSuccess?.emoteMap ?: emptyMap(),
+            maxTimestampMs = currentSuccess?.videoDurationMs?.takeIf { it > 0L }
+                ?: progressState.duration.takeIf { it > 0L },
             onRootCommentClick = { viewModel.openRootCommentComposer() },
             onReplyClick = { reply ->
                 viewModel.setReplyingTo(reply)
@@ -1869,8 +1941,9 @@ private fun VideoPageItem(
                 canUploadImage = commentState.canUploadImage,
                 canInputComment = commentState.canInputComment,
                 emotePackages = emotePackages,
-                onSend = { message, imageUris ->
-                    viewModel.sendComment(message, imageUris)
+                currentVideoPositionMsProvider = { exoPlayer.currentPosition.coerceAtLeast(0L) },
+                onSend = { message, imageUris, syncToDynamic ->
+                    viewModel.sendComment(message, imageUris, syncToDynamic)
                     viewModel.hideCommentInputDialog()
                 }
             )

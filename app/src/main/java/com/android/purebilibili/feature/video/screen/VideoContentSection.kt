@@ -72,6 +72,7 @@ import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
+import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
@@ -215,6 +216,7 @@ fun VideoContentSection(
     onLoadMoreReplies: () -> Unit,
     onDownloadClick: () -> Unit = {},
     onWatchLaterClick: () -> Unit = {},
+    onShareClick: () -> Unit = {},
     onTimestampClick: ((Long) -> Unit)? = null,
     onDanmakuSendClick: () -> Unit = {},
     danmakuEnabled: Boolean = true,
@@ -230,6 +232,8 @@ fun VideoContentSection(
     // [新增] 已点赞的评论 ID 集合
     likedComments: Set<Long> = emptySet(),
     onCommentUrlClick: (String) -> Unit = {},
+    onReportComment: (Long, Int) -> Unit = { _, _ -> },
+    onToggleTopComment: (ReplyItem) -> Unit = {},
     // 🔗 [新增] 共享元素过渡开关
     transitionEnabled: Boolean = false,
     // [新增] 收藏夹相关参数
@@ -255,6 +259,7 @@ fun VideoContentSection(
     onBgmClick: (BgmInfo) -> Unit = {},
     ownerFollowerCount: Int? = null,
     ownerVideoCount: Int? = null,
+    showUpBadge: Boolean = true,
     showInteractionActions: Boolean = true,
     isVideoPlaying: Boolean = false
 ) {
@@ -359,10 +364,12 @@ fun VideoContentSection(
                         onOpenCollectionSheet = { showCollectionSheet = true },
                         onDownloadClick = onDownloadClick,
                         onWatchLaterClick = onWatchLaterClick,
+                        onShareClick = onShareClick,
                         contentPadding = PaddingValues(bottom = bottomContentPadding),
                         transitionEnabled = transitionEnabled,
                         ownerFollowerCount = ownerFollowerCount,
                         ownerVideoCount = ownerVideoCount,
+                        showUpBadge = showUpBadge,
                         onFavoriteLongClick = onFavoriteLongClick,
                         aiSummary = aiSummary,
                         aiSummaryPrompt = aiSummaryPrompt,
@@ -409,6 +416,8 @@ fun VideoContentSection(
                         onCommentLike = onCommentLike,
                         likedComments = likedComments,
                         onCommentUrlClick = onCommentUrlClick,
+                        onReportComment = onReportComment,
+                        onToggleTopComment = onToggleTopComment,
                         lightweightCommentRendering = lightweightCommentRendering
                     )
                 }
@@ -481,10 +490,12 @@ private fun VideoIntroTab(
     onOpenCollectionSheet: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    onShareClick: () -> Unit = {},
     contentPadding: PaddingValues,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     ownerFollowerCount: Int? = null,
     ownerVideoCount: Int? = null,
+    showUpBadge: Boolean = true,
     onFavoriteLongClick: () -> Unit = {},
     aiSummary: AiSummaryData? = null,
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
@@ -521,6 +532,7 @@ private fun VideoIntroTab(
                 onOpenCollectionSheet = onOpenCollectionSheet,
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
+                onShareClick = onShareClick,
 
                 onGloballyPositioned = { },
                 transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
@@ -570,6 +582,7 @@ private fun VideoIntroTab(
                     video = video,
                     isFollowed = video.owner.mid in followingMids,
                     transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
+                    showUpBadge = showUpBadge,
                     onClick = openRelatedVideo
                 )
             }
@@ -611,6 +624,8 @@ private fun VideoCommentTab(
     onCommentLike: (Long) -> Unit,
     likedComments: Set<Long>,
     onCommentUrlClick: (String) -> Unit,
+    onReportComment: (Long, Int) -> Unit,
+    onToggleTopComment: (ReplyItem) -> Unit,
     lightweightCommentRendering: Boolean
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
@@ -686,12 +701,21 @@ private fun VideoCommentTab(
                             onClick = {},
                             onSubClick = { onSubReplyClick(reply) },
                             onTimestampClick = onTimestampClick,
+                            maxTimestampMs = info.pages.firstOrNull { it.cid == info.cid }?.duration?.times(1000L)
+                                ?: info.pages.firstOrNull()?.duration?.times(1000L),
                             onImagePreview = { images, index, rect, textContent ->
                                 onImagePreview(images, index, rect, textContent)
                             },
                             // [新增] 点赞事件
                             onLikeClick = { onCommentLike(reply.rpid) },
                             onReplyClick = { onCommentReplyClick(reply) },
+                            onReportClick = { reason -> onReportComment(reply.rpid, reason) },
+                            canToggleTop = shouldShowReplyTopAction(
+                                currentMid = currentMid,
+                                upMid = info.owner.mid,
+                                item = reply
+                            ),
+                            onToggleTopClick = { onToggleTopComment(reply) },
                             // [修复] 正确传递点赞状态 (API数据 或 本地乐观更新)
                             isLiked = reply.action == 1 || reply.rpid in likedComments,
                             // [新增] 仅当评论 mid 与当前登录用户 mid 一致时显示删除按钮
@@ -769,6 +793,7 @@ private fun VideoHeaderContent(
     onOpenCollectionSheet: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    onShareClick: () -> Unit = {},
     onGloballyPositioned: (Float) -> Unit,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     ownerFollowerCount: Int? = null,
@@ -849,7 +874,8 @@ private fun VideoHeaderContent(
                 onCommentClick = {},
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
-                onFavoriteLongClick = onFavoriteLongClick
+                onFavoriteLongClick = onFavoriteLongClick,
+                onShareClick = onShareClick
             )
         }
 

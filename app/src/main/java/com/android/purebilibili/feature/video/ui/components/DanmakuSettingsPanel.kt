@@ -3,7 +3,13 @@ package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.store.DanmakuSettingsScope
+import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleSections
+import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
+import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
+import com.android.purebilibili.feature.video.danmaku.mergeDanmakuBlockRuleSections
+import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
+import com.android.purebilibili.feature.video.danmaku.partitionDanmakuBlockRules
 import com.android.purebilibili.feature.video.danmaku.resolveFaceOcclusionModuleUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +26,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +38,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -41,13 +51,112 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-// 主题色将在 Composable 内通过 MaterialTheme.colorScheme.primary 获取
-private val PanelBackground = Color(0xFF1E1E1E)
-private val CardBackground = Color(0xFF2A2A2A)
 private const val FULLSCREEN_DANMAKU_PANEL_WIDTH_FRACTION = 0.25f
 private const val FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP = 220
 private const val WIDE_INLINE_DANMAKU_PANEL_MAX_WIDTH_DP = 640
 private const val WIDE_INLINE_DANMAKU_PANEL_SCREEN_WIDTH_DP = 840
+
+enum class DanmakuSettingsPanelAnchor {
+    Center,
+    End,
+    Bottom
+}
+
+data class DanmakuSettingsPanelSurfaceColors(
+    val panelColor: Color,
+    val itemColor: Color,
+    val titleColor: Color,
+    val supportingColor: Color,
+    val dividerColor: Color,
+    val badgeBackgroundColor: Color,
+    val badgeBorderColor: Color,
+    val badgeContentColor: Color,
+    val sliderActiveTrackColor: Color,
+    val sliderInactiveTrackColor: Color,
+    val sliderActiveTickColor: Color,
+    val sliderInactiveTickColor: Color,
+    val sliderThumbColor: Color,
+    val resetButtonColor: Color,
+    val resetButtonBackgroundColor: Color,
+    val fieldBorderColor: Color,
+    val fieldBackgroundColor: Color
+)
+
+internal fun resolveDanmakuSettingsPanelSurfaceColors(
+    colorScheme: ColorScheme
+): DanmakuSettingsPanelSurfaceColors {
+    val isDark = colorScheme.surface.luminance() < 0.5f
+    val titleColor = colorScheme.onSurface
+    val supportingColor = colorScheme.onSurfaceVariant.copy(
+        alpha = if (isDark) 0.74f else 0.8f
+    )
+    return DanmakuSettingsPanelSurfaceColors(
+        panelColor = if (isDark) {
+            colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
+        } else {
+            colorScheme.surface.copy(alpha = 0.97f)
+        },
+        itemColor = if (isDark) {
+            colorScheme.surfaceContainer.copy(alpha = 0.72f)
+        } else {
+            colorScheme.surfaceContainerLow.copy(alpha = 0.9f)
+        },
+        titleColor = titleColor,
+        supportingColor = supportingColor,
+        dividerColor = titleColor.copy(alpha = if (isDark) 0.1f else 0.08f),
+        badgeBackgroundColor = colorScheme.primary.copy(alpha = if (isDark) 0.18f else 0.12f),
+        badgeBorderColor = colorScheme.primary.copy(alpha = if (isDark) 0.35f else 0.22f),
+        badgeContentColor = colorScheme.primary,
+        sliderActiveTrackColor = colorScheme.primary.copy(alpha = if (isDark) 0.82f else 0.9f),
+        sliderInactiveTrackColor = titleColor.copy(alpha = if (isDark) 0.14f else 0.1f),
+        sliderActiveTickColor = colorScheme.primary.copy(alpha = if (isDark) 0.34f else 0.3f),
+        sliderInactiveTickColor = titleColor.copy(alpha = if (isDark) 0.2f else 0.14f),
+        sliderThumbColor = colorScheme.primaryContainer.copy(alpha = if (isDark) 0.96f else 1f),
+        resetButtonColor = titleColor.copy(alpha = if (isDark) 0.78f else 0.68f),
+        resetButtonBackgroundColor = titleColor.copy(alpha = if (isDark) 0.08f else 0.05f),
+        fieldBorderColor = titleColor.copy(alpha = if (isDark) 0.2f else 0.14f),
+        fieldBackgroundColor = titleColor.copy(alpha = if (isDark) 0.03f else 0.02f)
+    )
+}
+
+internal fun resolveDanmakuSyncStatusBadgeText(syncUiState: DanmakuCloudSyncUiState): String {
+    return when (syncUiState.status) {
+        DanmakuCloudSyncStatus.IDLE -> "未同步"
+        DanmakuCloudSyncStatus.PENDING -> "待同步"
+        DanmakuCloudSyncStatus.SYNCING -> "同步中"
+        DanmakuCloudSyncStatus.SUCCESS -> "已同步"
+        DanmakuCloudSyncStatus.FAILURE -> "同步失败"
+    }
+}
+
+internal fun shouldShowDanmakuSyncRetry(status: DanmakuCloudSyncStatus): Boolean {
+    return status == DanmakuCloudSyncStatus.FAILURE
+}
+
+internal fun resolveDanmakuBlockManagerSections(blockRulesRaw: String): DanmakuBlockRuleSections {
+    return partitionDanmakuBlockRules(parseDanmakuBlockRules(blockRulesRaw))
+}
+
+internal fun persistDanmakuBlockManagerSections(sections: DanmakuBlockRuleSections): String {
+    return mergeDanmakuBlockRuleSections(
+        keywordRules = sections.keywordRules,
+        regexRules = sections.regexRules,
+        userHashRules = sections.userHashRules
+    ).joinToString(separator = "\n")
+}
+
+internal fun resolveDanmakuBlockRuleCount(sections: DanmakuBlockRuleSections): Int {
+    return sections.keywordRules.size + sections.regexRules.size + sections.userHashRules.size
+}
+
+internal fun resolveDanmakuBlockRuleBadgeText(count: Int): String {
+    if (count <= 0) return "0"
+    return if (count > 99) "99+" else count.toString()
+}
+
+internal fun resolveDanmakuBlockManagerTabLabel(label: String, count: Int): String {
+    return if (count > 0) "$label $count" else label
+}
 
 enum class DanmakuSettingsPanelPresentation {
     CenteredDialog,
@@ -56,6 +165,7 @@ enum class DanmakuSettingsPanelPresentation {
 
 data class DanmakuSettingsPanelLayoutPolicy(
     val presentation: DanmakuSettingsPanelPresentation,
+    val anchor: DanmakuSettingsPanelAnchor,
     val horizontalPaddingDp: Int,
     val bottomPaddingDp: Int,
     val minWidthDp: Int,
@@ -79,6 +189,7 @@ fun resolveDanmakuSettingsPanelLayoutPolicy(
             .coerceAtLeast(FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP)
         return DanmakuSettingsPanelLayoutPolicy(
             presentation = DanmakuSettingsPanelPresentation.CenteredDialog,
+            anchor = DanmakuSettingsPanelAnchor.End,
             horizontalPaddingDp = 16,
             bottomPaddingDp = 0,
             minWidthDp = FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP,
@@ -93,6 +204,7 @@ fun resolveDanmakuSettingsPanelLayoutPolicy(
     ) {
         return DanmakuSettingsPanelLayoutPolicy(
             presentation = DanmakuSettingsPanelPresentation.CenteredDialog,
+            anchor = DanmakuSettingsPanelAnchor.Center,
             horizontalPaddingDp = 24,
             bottomPaddingDp = 0,
             minWidthDp = 520,
@@ -109,6 +221,7 @@ fun resolveDanmakuSettingsPanelLayoutPolicy(
 
     return DanmakuSettingsPanelLayoutPolicy(
         presentation = DanmakuSettingsPanelPresentation.BottomSheet,
+        anchor = DanmakuSettingsPanelAnchor.Bottom,
         horizontalPaddingDp = horizontalPaddingDp,
         bottomPaddingDp = 20,
         minWidthDp = 0,
@@ -141,8 +254,17 @@ fun DanmakuSettingsPanel(
     settingsScope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT,
     opacity: Float,
     fontScale: Float,
+    showAdvancedSection: Boolean = false,
+    fontWeight: Int = 5,
     speed: Float,
     displayArea: Float = 0.5f,
+    strokeWidth: Float = 1.5f,
+    lineHeight: Float = 1.6f,
+    scrollDurationSeconds: Float = 7.0f,
+    staticDurationSeconds: Float = 4.0f,
+    scrollFixedVelocity: Boolean = false,
+    staticDanmakuToScroll: Boolean = false,
+    massiveMode: Boolean = false,
     mergeDuplicates: Boolean = true,
     allowScroll: Boolean = true,
     allowTop: Boolean = true,
@@ -151,15 +273,25 @@ fun DanmakuSettingsPanel(
     allowSpecial: Boolean = true,
     showBlockRuleEditor: Boolean = false,
     showSmartOcclusionSection: Boolean = true,
+    showSyncSection: Boolean = false,
     blockRulesRaw: String = "",
     smartOcclusion: Boolean = true,
     fullscreenWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
+    syncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
     smartOcclusionDownloadProgress: Int? = null,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
+    onFontWeightChange: (Int) -> Unit = {},
     onSpeedChange: (Float) -> Unit,
     onDisplayAreaChange: (Float) -> Unit = {},
+    onStrokeWidthChange: (Float) -> Unit = {},
+    onLineHeightChange: (Float) -> Unit = {},
+    onScrollDurationSecondsChange: (Float) -> Unit = {},
+    onStaticDurationSecondsChange: (Float) -> Unit = {},
+    onScrollFixedVelocityChange: (Boolean) -> Unit = {},
+    onStaticDanmakuToScrollChange: (Boolean) -> Unit = {},
+    onMassiveModeChange: (Boolean) -> Unit = {},
     onMergeDuplicatesChange: (Boolean) -> Unit = {},
     onAllowScrollChange: (Boolean) -> Unit = {},
     onAllowTopChange: (Boolean) -> Unit = {},
@@ -169,11 +301,24 @@ fun DanmakuSettingsPanel(
     onBlockRulesRawChange: (String) -> Unit = {},
     onSmartOcclusionChange: (Boolean) -> Unit = {},
     onFullscreenWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
+    onSyncNowClick: () -> Unit = {},
     onSmartOcclusionDownloadClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
+    var showBlockManager by remember { mutableStateOf(false) }
+    val blockManagerSections = remember(blockRulesRaw) {
+        resolveDanmakuBlockManagerSections(blockRulesRaw)
+    }
+    val totalBlockRuleCount = remember(blockManagerSections) {
+        resolveDanmakuBlockRuleCount(blockManagerSections)
+    }
     val configuration = LocalConfiguration.current
     val viewConfiguration = LocalViewConfiguration.current
+    val colorScheme = MaterialTheme.colorScheme
+    val panelColors = remember(colorScheme) {
+        resolveDanmakuSettingsPanelSurfaceColors(colorScheme)
+    }
+    val isFullscreenStyle = isFullscreen
     val layoutPolicy = remember(
         isFullscreen,
         configuration.screenWidthDp,
@@ -202,18 +347,18 @@ fun DanmakuSettingsPanel(
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = if (
-                layoutPolicy.presentation == DanmakuSettingsPanelPresentation.BottomSheet
-            ) {
-                Alignment.BottomCenter
-            } else {
-                Alignment.Center
+            contentAlignment = when (layoutPolicy.anchor) {
+                DanmakuSettingsPanelAnchor.Bottom -> Alignment.BottomCenter
+                DanmakuSettingsPanelAnchor.End -> Alignment.CenterEnd
+                DanmakuSettingsPanelAnchor.Center -> Alignment.Center
             }
         ) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
+                    .background(
+                        Color.Black.copy(alpha = if (isFullscreenStyle) 0.42f else 0.6f)
+                    )
                     .pointerInput(onDismiss, viewConfiguration.touchSlop) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -262,7 +407,7 @@ fun DanmakuSettingsPanel(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }
                     ) { },
-                color = PanelBackground,
+                color = panelColors.panelColor,
                 shape = RoundedCornerShape(20.dp),
                 tonalElevation = 16.dp,
                 shadowElevation = 24.dp
@@ -270,7 +415,7 @@ fun DanmakuSettingsPanel(
                 Column(
                     modifier = Modifier
                         .verticalScroll(rememberScrollState())
-                        .padding(24.dp)
+                        .padding(if (isFullscreenStyle) 20.dp else 24.dp)
                 ) {
                     // Header
                     Row(
@@ -283,8 +428,8 @@ fun DanmakuSettingsPanel(
                         ) {
                             Text(
                                 text = "弹幕设置",
-                                color = Color.White,
-                                fontSize = 20.sp,
+                                color = panelColors.titleColor,
+                                fontSize = if (isFullscreenStyle) 18.sp else 20.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -295,24 +440,24 @@ fun DanmakuSettingsPanel(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(999.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                                        .background(panelColors.badgeBackgroundColor)
                                         .border(
                                             width = 1.dp,
-                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                            color = panelColors.badgeBorderColor,
                                             shape = RoundedCornerShape(999.dp)
                                         )
                                         .padding(horizontal = 10.dp, vertical = 5.dp)
                                 ) {
                                     Text(
                                         text = settingsScope.badgeLabel,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = panelColors.badgeContentColor,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                                 Text(
                                     text = settingsScope.subtitle,
-                                    color = Color.White.copy(alpha = 0.58f),
+                                    color = panelColors.supportingColor,
                                     fontSize = 11.sp
                                 )
                             }
@@ -321,12 +466,12 @@ fun DanmakuSettingsPanel(
                             onClick = onDismiss,
                             modifier = Modifier
                                 .size(32.dp)
-                                .background(Color.White.copy(0.1f), CircleShape)
+                                .background(panelColors.resetButtonBackgroundColor, CircleShape)
                         ) {
                             Icon(
                                 CupertinoIcons.Default.Xmark,
                                 contentDescription = "关闭",
-                                tint = Color.White.copy(0.8f),
+                                tint = panelColors.resetButtonColor,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -334,10 +479,87 @@ fun DanmakuSettingsPanel(
                     
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    if (showSyncSection) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = panelColors.itemColor,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "账号同步",
+                                        color = panelColors.titleColor,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = syncUiState.message
+                                            ?: when (syncUiState.status) {
+                                                DanmakuCloudSyncStatus.SUCCESS -> "当前基础弹幕设置已同步到账号"
+                                                DanmakuCloudSyncStatus.SYNCING -> "正在同步当前弹幕设置"
+                                                DanmakuCloudSyncStatus.PENDING -> "检测到设置变更，等待同步"
+                                                DanmakuCloudSyncStatus.FAILURE -> "最近一次同步失败，可立即重试"
+                                                DanmakuCloudSyncStatus.IDLE -> "当前设备本地设置尚未触发同步"
+                                            },
+                                        color = panelColors.supportingColor,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .background(panelColors.badgeBackgroundColor)
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Text(
+                                            text = resolveDanmakuSyncStatusBadgeText(syncUiState),
+                                            color = panelColors.badgeContentColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = onSyncNowClick,
+                                        enabled = syncUiState.status != DanmakuCloudSyncStatus.SYNCING,
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text(
+                                            text = if (shouldShowDanmakuSyncRetry(syncUiState.status)) {
+                                                "重试同步"
+                                            } else {
+                                                "立即同步"
+                                            },
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
                     // Settings Card
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = CardBackground,
+                        color = panelColors.itemColor,
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(
@@ -345,21 +567,65 @@ fun DanmakuSettingsPanel(
                             verticalArrangement = Arrangement.spacedBy(20.dp)
                         ) {
                             DanmakuSliderItem(
+                                label = if (isFullscreenStyle) "全屏字体大小" else "字体大小",
+                                value = fontScale,
+                                valueRange = 0.3f..2f,
+                                displayValue = { "${(it * 100).toInt()}%" },
+                                onValueChange = onFontScaleChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle,
+                                resetValue = 1f,
+                                tickCount = 20,
+                                valueText = { String.format("%.1f%%", it * 100f) }
+                            )
+                            if (isFullscreenStyle && showAdvancedSection) {
+                                DanmakuSliderItem(
+                                    label = "滚动弹幕时长",
+                                    value = scrollDurationSeconds,
+                                    valueRange = 2f..15f,
+                                    displayValue = { "${it.roundToInt()}s" },
+                                    onValueChange = onScrollDurationSecondsChange,
+                                    colors = panelColors,
+                                    fullscreenStyle = true,
+                                    resetValue = 7f,
+                                    tickCount = 20,
+                                    valueText = { String.format("%.1f 秒", it) }
+                                )
+                                DanmakuSliderItem(
+                                    label = "静态弹幕时长",
+                                    value = staticDurationSeconds,
+                                    valueRange = 2f..15f,
+                                    displayValue = { "${it.roundToInt()}s" },
+                                    onValueChange = onStaticDurationSecondsChange,
+                                    colors = panelColors,
+                                    fullscreenStyle = true,
+                                    resetValue = 4f,
+                                    tickCount = 20,
+                                    valueText = { String.format("%.1f 秒", it) }
+                                )
+                                DanmakuSliderItem(
+                                    label = "弹幕行高",
+                                    value = lineHeight,
+                                    valueRange = 0.8f..2.2f,
+                                    displayValue = { String.format("%.1f", it) },
+                                    onValueChange = onLineHeightChange,
+                                    colors = panelColors,
+                                    fullscreenStyle = true,
+                                    resetValue = 1.6f,
+                                    tickCount = 14
+                                )
+                            }
+                            DanmakuSliderItem(
                                 label = "透明度",
                                 value = opacity,
                                 valueRange = 0.3f..1f,
                                 displayValue = { "${(it * 100).toInt()}%" },
-                                onValueChange = onOpacityChange
+                                onValueChange = onOpacityChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle,
+                                resetValue = 1f,
+                                tickCount = 16
                             )
-                            
-                            DanmakuSliderItem(
-                                label = "字体大小",
-                                value = fontScale,
-                                valueRange = 0.3f..2f,
-                                displayValue = { "${(it * 100).toInt()}%" },
-                                onValueChange = onFontScaleChange
-                            )
-                            
                             DanmakuSliderItem(
                                 label = "弹幕速度",
                                 value = speed,
@@ -371,8 +637,121 @@ fun DanmakuSettingsPanel(
                                         else -> "中"
                                     }
                                 },
-                                onValueChange = onSpeedChange
+                                onValueChange = onSpeedChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle,
+                                resetValue = 1f,
+                                tickCount = 18
                             )
+                        }
+                    }
+
+                    if (showAdvancedSection) {
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = panelColors.itemColor,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                Text(
+                                    text = "高级渲染",
+                                    color = panelColors.titleColor,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "更细的弹幕渲染控制",
+                                    color = panelColors.supportingColor,
+                                    fontSize = 11.sp
+                                )
+                                DanmakuSliderItem(
+                                    label = "字体粗细",
+                                    value = fontWeight.toFloat(),
+                                    valueRange = 1f..9f,
+                                    steps = 7,
+                                    displayValue = { "${it.roundToInt()}" },
+                                    onValueChange = { onFontWeightChange(it.roundToInt()) },
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle,
+                                    resetValue = 5f,
+                                    tickCount = 9
+                                )
+                                DanmakuSliderItem(
+                                    label = "描边粗细",
+                                    value = strokeWidth,
+                                    valueRange = 0f..4f,
+                                    displayValue = { String.format("%.1f", it) },
+                                    onValueChange = onStrokeWidthChange,
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle,
+                                    resetValue = 1.5f,
+                                    tickCount = 12
+                                )
+                                if (!isFullscreenStyle) {
+                                    DanmakuSliderItem(
+                                        label = "弹幕行高",
+                                        value = lineHeight,
+                                        valueRange = 0.8f..2.2f,
+                                        displayValue = { String.format("%.1f", it) },
+                                        onValueChange = onLineHeightChange,
+                                        colors = panelColors,
+                                        fullscreenStyle = false,
+                                        resetValue = 1.6f,
+                                        tickCount = 14
+                                    )
+                                    DanmakuSliderItem(
+                                        label = "滚动弹幕时长",
+                                        value = scrollDurationSeconds,
+                                        valueRange = 2f..15f,
+                                        displayValue = { "${it.roundToInt()}s" },
+                                        onValueChange = onScrollDurationSecondsChange,
+                                        colors = panelColors,
+                                        fullscreenStyle = false,
+                                        resetValue = 7f,
+                                        tickCount = 20,
+                                        valueText = { String.format("%.1f 秒", it) }
+                                    )
+                                    DanmakuSliderItem(
+                                        label = "静态弹幕时长",
+                                        value = staticDurationSeconds,
+                                        valueRange = 2f..15f,
+                                        displayValue = { "${it.roundToInt()}s" },
+                                        onValueChange = onStaticDurationSecondsChange,
+                                        colors = panelColors,
+                                        fullscreenStyle = false,
+                                        resetValue = 4f,
+                                        tickCount = 20,
+                                        valueText = { String.format("%.1f 秒", it) }
+                                    )
+                                }
+                                DanmakuFilterSwitchRow(
+                                    label = "固定滚动速度",
+                                    checked = scrollFixedVelocity,
+                                    onCheckedChange = onScrollFixedVelocityChange,
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle
+                                )
+                                DanmakuFilterSwitchRow(
+                                    label = "固定弹幕转滚动",
+                                    checked = staticDanmakuToScroll,
+                                    onCheckedChange = onStaticDanmakuToScrollChange,
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle
+                                )
+                                DanmakuFilterSwitchRow(
+                                    label = "海量弹幕模式",
+                                    checked = massiveMode,
+                                    onCheckedChange = onMassiveModeChange,
+                                    showDivider = false,
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle
+                                )
+                            }
                         }
                     }
                 
@@ -380,14 +759,16 @@ fun DanmakuSettingsPanel(
                 
                     DanmakuAreaSelector(
                         currentArea = displayArea,
-                        onAreaChange = onDisplayAreaChange
+                        onAreaChange = onDisplayAreaChange,
+                        colors = panelColors,
+                        fullscreenStyle = isFullscreenStyle
                     )
                 
                     Spacer(modifier = Modifier.height(16.dp))
                 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = CardBackground,
+                        color = panelColors.itemColor,
                         shape = RoundedCornerShape(16.dp),
                         onClick = { onMergeDuplicatesChange(!mergeDuplicates) }
                     ) {
@@ -401,14 +782,14 @@ fun DanmakuSettingsPanel(
                             Column {
                                 Text(
                                     text = "合并重复弹幕",
-                                    color = Color.White,
+                                    color = panelColors.titleColor,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "减少刷屏干扰，将重复内容合并显示",
-                                    color = Color.White.copy(0.5f),
+                                    color = panelColors.supportingColor,
                                     fontSize = 11.sp
                                 )
                             }
@@ -417,10 +798,10 @@ fun DanmakuSettingsPanel(
                                 checked = mergeDuplicates,
                                 onCheckedChange = onMergeDuplicatesChange,
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
+                                    checkedThumbColor = panelColors.panelColor,
                                     checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = Color.White.copy(0.1f)
+                                    uncheckedThumbColor = panelColors.panelColor,
+                                    uncheckedTrackColor = panelColors.sliderInactiveTrackColor
                                 )
                             )
                         }
@@ -431,7 +812,7 @@ fun DanmakuSettingsPanel(
                     if (showSmartOcclusionSection) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = CardBackground,
+                            color = panelColors.itemColor,
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Row(
@@ -446,14 +827,14 @@ fun DanmakuSettingsPanel(
                                 ) {
                                     Text(
                                         text = "人脸模型",
-                                        color = Color.White,
+                                        color = panelColors.titleColor,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = moduleUiState.statusText,
-                                        color = Color.White.copy(0.65f),
+                                        color = panelColors.supportingColor,
                                         fontSize = 11.sp
                                     )
                                 }
@@ -479,7 +860,7 @@ fun DanmakuSettingsPanel(
     
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = CardBackground,
+                            color = panelColors.itemColor,
                             shape = RoundedCornerShape(16.dp),
                             onClick = { onSmartOcclusionChange(!smartOcclusion) }
                         ) {
@@ -493,14 +874,14 @@ fun DanmakuSettingsPanel(
                                 Column {
                                     Text(
                                         text = "智能避脸遮挡",
-                                        color = Color.White,
+                                        color = panelColors.titleColor,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = "实时识别人脸并避让弹幕轨道",
-                                        color = Color.White.copy(0.5f),
+                                        color = panelColors.supportingColor,
                                         fontSize = 11.sp
                                     )
                                 }
@@ -509,10 +890,10 @@ fun DanmakuSettingsPanel(
                                     checked = smartOcclusion,
                                     onCheckedChange = onSmartOcclusionChange,
                                     colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
+                                        checkedThumbColor = panelColors.panelColor,
                                         checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                        uncheckedThumbColor = Color.White,
-                                        uncheckedTrackColor = Color.White.copy(0.1f)
+                                        uncheckedThumbColor = panelColors.panelColor,
+                                        uncheckedTrackColor = panelColors.sliderInactiveTrackColor
                                     )
                                 )
                             }
@@ -523,20 +904,20 @@ fun DanmakuSettingsPanel(
     
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = CardBackground,
+                        color = panelColors.itemColor,
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 text = "屏蔽类型",
-                                color = Color.White,
+                                color = panelColors.titleColor,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "关闭对应开关即可屏蔽",
-                                color = Color.White.copy(0.5f),
+                                color = panelColors.supportingColor,
                                 fontSize = 11.sp
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -544,28 +925,38 @@ fun DanmakuSettingsPanel(
                             DanmakuFilterSwitchRow(
                                 label = "滚动弹幕",
                                 checked = allowScroll,
-                                onCheckedChange = onAllowScrollChange
+                                onCheckedChange = onAllowScrollChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle
                             )
                             DanmakuFilterSwitchRow(
                                 label = "顶部弹幕",
                                 checked = allowTop,
-                                onCheckedChange = onAllowTopChange
+                                onCheckedChange = onAllowTopChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle
                             )
                             DanmakuFilterSwitchRow(
                                 label = "底部弹幕",
                                 checked = allowBottom,
-                                onCheckedChange = onAllowBottomChange
+                                onCheckedChange = onAllowBottomChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle
                             )
                             DanmakuFilterSwitchRow(
                                 label = "彩色弹幕",
                                 checked = allowColorful,
-                                onCheckedChange = onAllowColorfulChange
+                                onCheckedChange = onAllowColorfulChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle
                             )
                             DanmakuFilterSwitchRow(
                                 label = "高级弹幕",
                                 checked = allowSpecial,
                                 onCheckedChange = onAllowSpecialChange,
-                                showDivider = false
+                                showDivider = false,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle
                             )
                         }
                     }
@@ -575,20 +966,56 @@ fun DanmakuSettingsPanel(
                     if (showBlockRuleEditor) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = CardBackground,
+                            color = panelColors.itemColor,
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
                                     text = "自定义屏蔽词",
-                                    color = Color.White,
+                                    color = panelColors.titleColor,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium
                                 )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = { showBlockManager = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "屏蔽管理",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        if (totalBlockRuleCount > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(999.dp))
+                                                    .background(panelColors.badgeBackgroundColor)
+                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = resolveDanmakuBlockRuleBadgeText(totalBlockRuleCount),
+                                                    color = panelColors.badgeContentColor,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "每行一个，支持普通关键词与正则：regex:xxx / re:xxx / /xxx/",
-                                    color = Color.White.copy(0.5f),
+                                    text = if (totalBlockRuleCount > 0) {
+                                        "已维护 $totalBlockRuleCount 条规则，修改后立即生效"
+                                    } else {
+                                        "每行一个，支持关键词、正则与 UID(hash)：regex:xxx / re:xxx / /xxx/ / uid:xxx"
+                                    },
+                                    color = panelColors.supportingColor,
                                     fontSize = 11.sp
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -598,7 +1025,7 @@ fun DanmakuSettingsPanel(
                                     placeholder = {
                                         Text(
                                             text = "例如：剧透\\nregex:第\\\\d+集\\n/哈{3,}/",
-                                            color = Color.White.copy(0.35f),
+                                            color = panelColors.supportingColor.copy(alpha = 0.6f),
                                             fontSize = 12.sp
                                         )
                                     },
@@ -606,17 +1033,249 @@ fun DanmakuSettingsPanel(
                                     minLines = 3,
                                     maxLines = 6,
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
+                                        focusedTextColor = panelColors.titleColor,
+                                        unfocusedTextColor = panelColors.titleColor,
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                                        focusedContainerColor = Color.White.copy(alpha = 0.02f),
-                                        unfocusedContainerColor = Color.White.copy(alpha = 0.02f)
+                                        unfocusedBorderColor = panelColors.fieldBorderColor,
+                                        focusedContainerColor = panelColors.fieldBackgroundColor,
+                                        unfocusedContainerColor = panelColors.fieldBackgroundColor
                                     ),
                                     shape = RoundedCornerShape(12.dp)
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showBlockManager) {
+        DanmakuBlockManagerDialog(
+            rawRules = blockRulesRaw,
+            onRulesSave = { onBlockRulesRawChange(it) },
+            onDismiss = { showBlockManager = false }
+        )
+    }
+}
+
+@Composable
+private fun DanmakuBlockManagerDialog(
+    rawRules: String,
+    onRulesSave: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val panelColors = remember(colorScheme) {
+        resolveDanmakuSettingsPanelSurfaceColors(colorScheme)
+    }
+    val initialSections = remember(rawRules) {
+        resolveDanmakuBlockManagerSections(rawRules)
+    }
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var keywordRules by remember(rawRules) { mutableStateOf(initialSections.keywordRules) }
+    var regexRules by remember(rawRules) { mutableStateOf(initialSections.regexRules) }
+    var userHashRules by remember(rawRules) { mutableStateOf(initialSections.userHashRules) }
+    var inputValue by remember(selectedTabIndex) { mutableStateOf("") }
+
+    fun updateCurrentRules(transform: (List<String>) -> List<String>) {
+        when (selectedTabIndex) {
+            0 -> keywordRules = transform(keywordRules)
+            1 -> regexRules = transform(regexRules)
+            else -> userHashRules = transform(userHashRules)
+        }
+    }
+
+    val currentRules = when (selectedTabIndex) {
+        0 -> keywordRules
+        1 -> regexRules
+        else -> userHashRules
+    }
+    val tabCounts = remember(keywordRules, regexRules, userHashRules) {
+        listOf(keywordRules.size, regexRules.size, userHashRules.size)
+    }
+    val currentHint = when (selectedTabIndex) {
+        0 -> "例如：剧透"
+        1 -> "例如：regex:第\\d+集"
+        else -> "例如：uid:abc123 或 abc123"
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            color = panelColors.panelColor,
+            shape = RoundedCornerShape(20.dp),
+            tonalElevation = 16.dp,
+            shadowElevation = 24.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "屏蔽管理",
+                            color = panelColors.titleColor,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "分类维护关键词、正则和 UID(hash) 规则",
+                            color = panelColors.supportingColor,
+                            fontSize = 11.sp
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(panelColors.resetButtonBackgroundColor, CircleShape)
+                    ) {
+                        Icon(
+                            CupertinoIcons.Default.Xmark,
+                            contentDescription = "关闭",
+                            tint = panelColors.resetButtonColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("关键词", "正则", "UID(hash)").forEachIndexed { index, label ->
+                        FilterChip(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            label = {
+                                Text(
+                                    resolveDanmakuBlockManagerTabLabel(label, tabCounts[index]),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = inputValue,
+                    onValueChange = { inputValue = it },
+                    placeholder = {
+                        Text(
+                            text = currentHint,
+                            color = panelColors.supportingColor.copy(alpha = 0.6f),
+                            fontSize = 12.sp
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = panelColors.titleColor,
+                        unfocusedTextColor = panelColors.titleColor,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = panelColors.fieldBorderColor,
+                        focusedContainerColor = panelColors.fieldBackgroundColor,
+                        unfocusedContainerColor = panelColors.fieldBackgroundColor
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(
+                        onClick = {
+                            val candidate = inputValue.trim()
+                            if (candidate.isEmpty()) return@Button
+                            updateCurrentRules { (it + candidate).distinct() }
+                            inputValue = ""
+                        },
+                        enabled = inputValue.isNotBlank()
+                    ) {
+                        Text("添加")
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = panelColors.itemColor,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (currentRules.isEmpty()) {
+                            Text(
+                                text = "当前分类还没有规则",
+                                color = panelColors.supportingColor,
+                                fontSize = 12.sp
+                            )
+                        } else {
+                            currentRules.forEachIndexed { index, rule ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = rule,
+                                        color = panelColors.titleColor,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            updateCurrentRules { rules ->
+                                                rules.filterIndexed { currentIndex, _ ->
+                                                    currentIndex != index
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Text("删除")
+                                    }
+                                }
+                                if (index != currentRules.lastIndex) {
+                                    HorizontalDivider(color = panelColors.dividerColor)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            onRulesSave(
+                                persistDanmakuBlockManagerSections(
+                                    DanmakuBlockRuleSections(
+                                        keywordRules = keywordRules,
+                                        regexRules = regexRules,
+                                        userHashRules = userHashRules
+                                    )
+                                )
+                            )
+                            onDismiss()
+                        }
+                    ) {
+                        Text("保存")
                     }
                 }
             }
@@ -629,6 +1288,8 @@ private fun DanmakuFilterSwitchRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    colors: DanmakuSettingsPanelSurfaceColors,
+    fullscreenStyle: Boolean,
     showDivider: Boolean = true
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -636,28 +1297,28 @@ private fun DanmakuFilterSwitchRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onCheckedChange(!checked) }
-                .padding(vertical = 6.dp),
+                .padding(vertical = if (fullscreenStyle) 10.dp else 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = label,
-                color = Color.White,
-                fontSize = 14.sp
+                color = colors.titleColor,
+                fontSize = if (fullscreenStyle) 15.sp else 14.sp
             )
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
+                    checkedThumbColor = colors.panelColor,
                     checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    uncheckedThumbColor = Color.White,
-                    uncheckedTrackColor = Color.White.copy(0.1f)
+                    uncheckedThumbColor = colors.panelColor,
+                    uncheckedTrackColor = colors.sliderInactiveTrackColor
                 )
             )
         }
         if (showDivider) {
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            HorizontalDivider(color = colors.dividerColor)
         }
     }
 }
@@ -668,7 +1329,9 @@ private fun DanmakuFilterSwitchRow(
 @Composable
 private fun DanmakuAreaSelector(
     currentArea: Float,
-    onAreaChange: (Float) -> Unit
+    onAreaChange: (Float) -> Unit,
+    colors: DanmakuSettingsPanelSurfaceColors,
+    fullscreenStyle: Boolean
 ) {
     //  本地状态确保即时 UI 响应
     var localArea by remember(currentArea) { mutableFloatStateOf(currentArea) }
@@ -684,7 +1347,7 @@ private fun DanmakuAreaSelector(
     
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = CardBackground,
+        color = colors.itemColor,
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
@@ -692,7 +1355,7 @@ private fun DanmakuAreaSelector(
         ) {
             Text(
                 text = "显示区域",
-                color = Color.White,
+                color = colors.titleColor,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -723,8 +1386,8 @@ private fun DanmakuAreaSelector(
                                     )
                                 } else {
                                     Modifier
-                                        .background(Color.White.copy(0.05f))
-                                        .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(12.dp))
+                                        .background(colors.fieldBackgroundColor)
+                                        .border(1.dp, colors.fieldBorderColor, RoundedCornerShape(12.dp))
                                 }
                             )
                             .clickable { 
@@ -739,7 +1402,11 @@ private fun DanmakuAreaSelector(
                         ) {
                             Text(
                                 text = option.label,
-                                color = if (isSelected) Color.White else Color.White.copy(0.9f),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    colors.titleColor
+                                },
                                 fontSize = 15.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 textAlign = TextAlign.Center
@@ -747,7 +1414,11 @@ private fun DanmakuAreaSelector(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = option.subLabel,
-                                color = if (isSelected) Color.White.copy(0.8f) else Color.White.copy(0.5f),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                                } else {
+                                    colors.supportingColor
+                                },
                                 fontSize = 11.sp,
                                 textAlign = TextAlign.Center
                             )
@@ -764,10 +1435,24 @@ private fun DanmakuSliderItem(
     label: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int = 0,
     displayValue: (Float) -> String,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    colors: DanmakuSettingsPanelSurfaceColors,
+    fullscreenStyle: Boolean,
+    resetValue: Float? = null,
+    tickCount: Int = 0,
+    valueText: (Float) -> String = displayValue
 ) {
     var localValue by remember(value) { mutableFloatStateOf(value) }
+    val sliderProgress = remember(localValue, valueRange) {
+        val total = valueRange.endInclusive - valueRange.start
+        if (total <= 0f) {
+            0f
+        } else {
+            ((localValue - valueRange.start) / total).coerceIn(0f, 1f)
+        }
+    }
     
     Column {
         Row(
@@ -775,41 +1460,130 @@ private fun DanmakuSliderItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = label,
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(0.15f),
-                shape = RoundedCornerShape(6.dp)
-            ) {
+            if (fullscreenStyle) {
                 Text(
-                    text = displayValue(localValue),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    text = "$label ${valueText(localValue)}",
+                    color = colors.titleColor,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
                 )
+                if (resetValue != null) {
+                    IconButton(
+                        onClick = {
+                            localValue = resetValue
+                            onValueChange(resetValue)
+                        },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(colors.resetButtonBackgroundColor, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = "重置",
+                            tint = colors.resetButtonColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = label,
+                    color = colors.titleColor,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(0.15f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = displayValue(localValue),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
         
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        Slider(
-            value = localValue,
-            onValueChange = { newValue ->
-                localValue = newValue
-                onValueChange(newValue)
-            },
-            valueRange = valueRange,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = Color.White.copy(0.15f)
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
+        Spacer(modifier = Modifier.height(if (fullscreenStyle) 10.dp else 12.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (fullscreenStyle) 32.dp else 28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (fullscreenStyle && tickCount > 1) {
+                DanmakuSliderTicks(
+                    tickCount = tickCount,
+                    progress = sliderProgress,
+                    colors = colors,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp)
+                )
+            }
+
+            Slider(
+                value = localValue,
+                onValueChange = { newValue ->
+                    localValue = newValue
+                    onValueChange(newValue)
+                },
+                valueRange = valueRange,
+                steps = steps,
+                colors = SliderDefaults.colors(
+                    thumbColor = if (fullscreenStyle) {
+                        colors.sliderThumbColor
+                    } else {
+                        Color.White
+                    },
+                    activeTrackColor = if (fullscreenStyle) {
+                        colors.sliderActiveTrackColor
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                    inactiveTrackColor = if (fullscreenStyle) {
+                        colors.sliderInactiveTrackColor
+                    } else {
+                        Color.White.copy(0.15f)
+                    }
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun DanmakuSliderTicks(
+    tickCount: Int,
+    progress: Float,
+    colors: DanmakuSettingsPanelSurfaceColors,
+    modifier: Modifier = Modifier
+) {
+    val activeTickIndex = ((tickCount - 1) * progress).roundToInt()
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(tickCount) { index ->
+            Box(
+                modifier = Modifier
+                    .size(if (index == activeTickIndex) 8.dp else 6.dp)
+                    .background(
+                        color = if (index <= activeTickIndex) {
+                            colors.sliderActiveTickColor
+                        } else {
+                            colors.sliderInactiveTickColor
+                        },
+                        shape = CircleShape
+                    )
+            )
+        }
     }
 }

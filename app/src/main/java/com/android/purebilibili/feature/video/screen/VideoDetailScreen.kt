@@ -19,6 +19,7 @@ import android.view.Window
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -164,6 +165,7 @@ import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.IOSModalBottomSheet
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.ShareUtils
 import coil.compose.AsyncImage
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -171,6 +173,10 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.feature.video.ui.components.DanmakuContextMenu
+import com.android.purebilibili.feature.video.ui.components.DanmakuBlockActionTarget
+import com.android.purebilibili.feature.video.ui.components.resolveDanmakuBlockActionFeedbackMessage
+import com.android.purebilibili.feature.video.danmaku.appendDanmakuKeywordBlockRule
+import com.android.purebilibili.feature.video.danmaku.appendDanmakuUserHashBlockRule
 import com.android.purebilibili.feature.video.ui.components.InteractiveChoiceOverlay
 import com.android.purebilibili.feature.video.ui.feedback.VideoFeedbackAnchor
 import com.android.purebilibili.feature.video.ui.feedback.TripleCelebrationPlacement
@@ -317,6 +323,36 @@ internal fun shouldOpenCommentUrlInApp(url: String): Boolean {
     if (scheme !in setOf("http", "https", "bili", "bilibili")) return false
     val host = uri.host?.lowercase().orEmpty()
     return host.contains("bilibili.com") || host.contains("b23.tv")
+}
+
+internal sealed interface CommentUrlNavigationTarget {
+    data class Video(val videoId: String) : CommentUrlNavigationTarget
+    data class Search(val keyword: String) : CommentUrlNavigationTarget
+    data class Space(val mid: Long) : CommentUrlNavigationTarget
+}
+
+internal fun resolveCommentUrlNavigationTarget(rawUrl: String): CommentUrlNavigationTarget? {
+    val url = rawUrl.trim()
+    if (url.isEmpty()) return null
+    return when (val target = com.android.purebilibili.core.util.BilibiliNavigationTargetParser.parse(url)) {
+        is com.android.purebilibili.core.util.BilibiliNavigationTarget.Video -> {
+            target.videoId.trim()
+                .takeIf { it.isNotEmpty() }
+                ?.let(CommentUrlNavigationTarget::Video)
+        }
+
+        is com.android.purebilibili.core.util.BilibiliNavigationTarget.Search -> {
+            target.keyword.trim()
+                .takeIf { it.isNotEmpty() }
+                ?.let(CommentUrlNavigationTarget::Search)
+        }
+
+        is com.android.purebilibili.core.util.BilibiliNavigationTarget.Space -> {
+            target.mid.takeIf { it > 0L }?.let(CommentUrlNavigationTarget::Space)
+        }
+
+        else -> null
+    }
 }
 
 internal fun resolveDanmakuDialogTopReservePx(
@@ -481,6 +517,7 @@ fun VideoDetailScreen(
     startAudioFromRoute: Boolean = false,
     autoEnterPortraitFromRoute: Boolean = false,
     resumePositionMsFromRoute: Long = 0L,
+    openCommentRootRpidFromRoute: Long = 0L,
     transitionEnabled: Boolean = false,
     predictiveBackAnimationEnabled: Boolean = true,
     transitionEnterDurationMillis: Int = 320,
@@ -489,6 +526,7 @@ fun VideoDetailScreen(
     onHomeClick: () -> Unit = onBack,
     onNavigateToAudioMode: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onSearchKeywordClick: (String) -> Unit = {},
     onVideoClick: (String, android.os.Bundle?) -> Unit,
     onUpClick: (Long) -> Unit = {},
     miniPlayerManager: MiniPlayerManager? = null,
@@ -502,6 +540,9 @@ fun VideoDetailScreen(
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val configuration = LocalConfiguration.current
+    val homeUpBadgesVisible by com.android.purebilibili.core.store.SettingsManager
+        .getHomeUpBadgesVisible(context)
+        .collectAsState(initial = true)
     val motionSpec = remember(transitionEnterDurationMillis) {
         resolveVideoDetailMotionSpec(transitionEnterDurationMillis)
     }
@@ -513,8 +554,7 @@ fun VideoDetailScreen(
     var isNavigatingToMiniMode by remember { mutableStateOf(false) }
     var hasAutoEnteredAudioMode by rememberSaveable { mutableStateOf(false) }
     var hasAutoEnteredPortraitFromRoute by rememberSaveable(bvid) { mutableStateOf(false) }
-    val backNavigationScope = rememberCoroutineScope()
-
+    var hasHandledCommentRootFromRoute by rememberSaveable(bvid, openCommentRootRpidFromRoute) { mutableStateOf(false) }
     val navigateToRelatedVideo = remember(onVideoClick, miniPlayerManager, uiState) {
         { targetBvid: String, options: android.os.Bundle? ->
             isNavigatingToVideo = true
@@ -550,20 +590,23 @@ fun VideoDetailScreen(
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
 
-        val parsedResult = com.android.purebilibili.core.util.BilibiliUrlParser.parse(url)
-        if (parsedResult.bvid != null) {
-            navigateToRelatedVideo(parsedResult.bvid, null)
-            return@openCommentUrl
-        }
+        when (val target = resolveCommentUrlNavigationTarget(url)) {
+            is CommentUrlNavigationTarget.Video -> {
+                navigateToRelatedVideo(target.videoId, null)
+                return@openCommentUrl
+            }
 
-        if (shouldOpenCommentUrlInApp(url)) {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching {
-                context.startActivity(intent)
-            }.isSuccess
-            if (launchedInApp) return@openCommentUrl
+            is CommentUrlNavigationTarget.Search -> {
+                onSearchKeywordClick(target.keyword)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Space -> {
+                onUpClick(target.mid)
+                return@openCommentUrl
+            }
+
+            null -> Unit
         }
 
         runCatching { uriHandler.openUri(url) }
@@ -612,6 +655,25 @@ fun VideoDetailScreen(
     //  监听评论状态
     val commentState by commentViewModel.commentState.collectAsStateWithLifecycle()
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(
+        openCommentRootRpidFromRoute,
+        commentState.replies,
+        commentState.isRepliesLoading,
+        subReplyState.visible
+    ) {
+        if (openCommentRootRpidFromRoute <= 0L || hasHandledCommentRootFromRoute || subReplyState.visible) {
+            return@LaunchedEffect
+        }
+
+        val rootReply = commentState.replies.firstOrNull { it.rpid == openCommentRootRpidFromRoute }
+        if (rootReply != null) {
+            commentViewModel.openSubReply(rootReply)
+            hasHandledCommentRootFromRoute = true
+        } else if (!commentState.isRepliesLoading && commentState.isRepliesEnd) {
+            hasHandledCommentRootFromRoute = true
+        }
+    }
     val commentDefaultSortMode by com.android.purebilibili.core.store.SettingsManager
         .getCommentDefaultSortMode(context)
         .collectAsStateWithLifecycle(
@@ -691,6 +753,15 @@ fun VideoDetailScreen(
         useTabletLayout = useTabletLayout
     )
     val isFullscreenMode = if (isOrientationDrivenFullscreen) isLandscape else userRequestedFullscreen
+    val activeDanmakuScope = remember(isFullscreenMode) {
+        com.android.purebilibili.core.store.resolveDanmakuSettingsScope(isLandscape = isFullscreenMode)
+    }
+    val activeDanmakuBlockRulesRaw by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuBlockRulesRaw(context, activeDanmakuScope)
+        .collectAsStateWithLifecycle(
+            initialValue = "",
+            lifecycle = lifecycleOwner.lifecycle
+        )
 
     var isPipMode by remember { mutableStateOf(isInPipMode) }
     var previousPipMode by remember { mutableStateOf(isInPipMode) }
@@ -784,7 +855,7 @@ fun VideoDetailScreen(
     }
 
     //  用于跟踪组件是否正在退出，防止 SideEffect 覆盖恢复操作
-    var isScreenActive by remember { mutableStateOf(true) }
+    var isScreenActive by rememberSaveable(currentBvid) { mutableStateOf(true) }
     
     //  [关键] 保存进入前的状态栏配置（在 DisposableEffect 外部定义以便复用）
     val activity = remember { context.findActivity() }
@@ -829,7 +900,11 @@ fun VideoDetailScreen(
     }
     
     //  [修复] 包装的 onBack，在导航之前立即恢复状态栏并通知小窗管理器
-    var isActuallyLeaving by remember { mutableStateOf(false) }
+    val latestOnBack by rememberUpdatedState(onBack)
+    val latestOnHomeClick by rememberUpdatedState(onHomeClick)
+    val topBarActionHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    var pendingTopBarActionRunnable by remember { mutableStateOf<Runnable?>(null) }
+    var isActuallyLeaving by rememberSaveable(currentBvid) { mutableStateOf(false) }
     var forceCoverOnlyOnReturn by remember { mutableStateOf(false) }
     val rootAnimatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val isExitTransitionInProgress =
@@ -844,12 +919,10 @@ fun VideoDetailScreen(
     )
 
     val handleTopBarAction = remember(
-        onBack,
-        onHomeClick,
         miniPlayerManager,
         currentBvid,
         coverTakeoverBeforeBackDelayMillis,
-        backNavigationScope
+        topBarActionHandler
     ) {
         action@{ action: VideoDetailTopBarAction ->
             if (isActuallyLeaving) return@action
@@ -862,15 +935,19 @@ fun VideoDetailScreen(
             miniPlayerManager?.markLeavingByNavigation(expectedBvid = currentBvid)
 
             restoreStatusBar() // 立即恢复状态栏（动画开始前）
-            backNavigationScope.launch {
-                // 给封面一个帧预算优先接管，避免视频帧 -> 封面的闪变
-                if (coverTakeoverBeforeBackDelayMillis > 0L) {
-                    kotlinx.coroutines.delay(coverTakeoverBeforeBackDelayMillis)
-                }
+            pendingTopBarActionRunnable?.let(topBarActionHandler::removeCallbacks)
+            val navigationRunnable = Runnable {
+                pendingTopBarActionRunnable = null
                 when (action) {
-                    VideoDetailTopBarAction.BACK -> onBack()
-                    VideoDetailTopBarAction.HOME -> onHomeClick()
+                    VideoDetailTopBarAction.BACK -> latestOnBack()
+                    VideoDetailTopBarAction.HOME -> latestOnHomeClick()
                 }
+            }
+            pendingTopBarActionRunnable = navigationRunnable
+            if (coverTakeoverBeforeBackDelayMillis > 0L) {
+                topBarActionHandler.postDelayed(navigationRunnable, coverTakeoverBeforeBackDelayMillis)
+            } else {
+                navigationRunnable.run()
             }
         }
     }
@@ -894,6 +971,9 @@ fun VideoDetailScreen(
     }
 
     LaunchedEffect(currentBvid) {
+        pendingTopBarActionRunnable?.let(topBarActionHandler::removeCallbacks)
+        pendingTopBarActionRunnable = null
+        isScreenActive = true
         forceCoverOnlyOnReturn = false
         if (shouldClearStaleReturningStateOnVideoDetailEnter(CardPositionManager.isReturningFromDetail)) {
             CardPositionManager.clearReturning()
@@ -903,6 +983,9 @@ fun VideoDetailScreen(
     DisposableEffect(lifecycleOwner, currentBvid) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                pendingTopBarActionRunnable?.let(topBarActionHandler::removeCallbacks)
+                pendingTopBarActionRunnable = null
+                isScreenActive = true
                 forceCoverOnlyOnReturn = false
                 if (shouldClearStaleReturningStateOnVideoDetailEnter(CardPositionManager.isReturningFromDetail)) {
                     CardPositionManager.clearReturning()
@@ -985,6 +1068,8 @@ fun VideoDetailScreen(
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         
         onDispose {
+            pendingTopBarActionRunnable?.let(topBarActionHandler::removeCallbacks)
+            pendingTopBarActionRunnable = null
             //  [关键] 标记页面正在退出，防止 SideEffect 覆盖
             isScreenActive = false
             
@@ -1172,6 +1257,23 @@ fun VideoDetailScreen(
     // 📱 [修复] 提升竖屏全屏状态到 Screen 级别，防止 VideoPlayerState 重建时状态丢失
     var isPortraitFullscreen by rememberSaveable { mutableStateOf(false) }
     val useSharedPortraitPlayer = shouldUseSharedPlayerForPortraitFullscreen()
+    val portraitPagerMotionSpec = remember {
+        resolveStandalonePortraitPagerMotionSpec()
+    }
+    val shouldAnimatePortraitPager = remember(useSharedPortraitPlayer) {
+        shouldAnimateStandalonePortraitPager(useSharedPlayer = useSharedPortraitPlayer)
+    }
+    val inlinePlayerAlpha by animateFloatAsState(
+        targetValue = if (isPortraitFullscreen) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = if (shouldAnimatePortraitPager) {
+                portraitPagerMotionSpec.exitDurationMillis
+            } else {
+                0
+            }
+        ),
+        label = "inline-player-alpha"
+    )
     var portraitSyncSnapshotBvid by rememberSaveable { mutableStateOf<String?>(null) }
     var portraitSyncSnapshotCid by remember { mutableLongStateOf(0L) }
     var portraitSyncSnapshotPositionMs by remember { mutableLongStateOf(0L) }
@@ -2044,6 +2146,8 @@ fun VideoDetailScreen(
                         currentAudioQuality = audioQualityPreference,
                         onAudioQualityChange = { viewModel.setAudioQuality(it) },
                         onRelatedVideoClick = navigateToRelatedVideo,
+                        showUpBadge = homeUpBadgesVisible,
+                        onSearchKeywordClick = onSearchKeywordClick,
                         // 🔁 [新增] 播放模式
                         currentPlayMode = currentPlayMode,
                         onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() },
@@ -2254,8 +2358,8 @@ fun VideoDetailScreen(
                                 .width(animatedViewportWidth)
                                 .height(animatedViewportHeight)
                                 .align(Alignment.TopCenter)
-                                // [Fix] 竖屏全屏时隐藏底层播放器，防止 UI (如 00:00 进度条) 透出
-                                .alpha(if (isPortraitFullscreen) 0f else 1f)
+                                // Fade with the pager so exiting portrait mode no longer hard-cuts.
+                                .alpha(inlinePlayerAlpha)
                         ) {
                             VideoPlayerSection(
                                 playerState = playerState,
@@ -2494,8 +2598,17 @@ fun VideoDetailScreen(
                                                         },
                                                         onLoadMoreReplies = { commentViewModel.loadComments() },
                                                         onCommentUrlClick = openCommentUrl,
+                                                        onReportComment = commentViewModel::reportComment,
+                                                        onToggleTopComment = commentViewModel::toggleTopComment,
                                                         onDownloadClick = { viewModel.openDownloadDialog() },
                                                         onWatchLaterClick = { viewModel.toggleWatchLater() },
+                                                        onShareClick = {
+                                                            ShareUtils.shareVideo(
+                                                                context = context,
+                                                                title = success.info.title,
+                                                                bvid = success.info.bvid
+                                                            )
+                                                        },
                                                         //  [新增] 时间戳点击跳转
                                                         onTimestampClick = { positionMs ->
                                                             seekPlayerFromUserAction(playerState.player, positionMs)
@@ -2544,6 +2657,7 @@ fun VideoDetailScreen(
                                                         onBgmClick = onBgmClick,
                                                         ownerFollowerCount = success.ownerFollowerCount,
                                                         ownerVideoCount = success.ownerVideoCount,
+                                                        showUpBadge = homeUpBadgesVisible,
                                                         showInteractionActions = shouldShowVideoDetailActionButtons(),
                                                         isVideoPlaying = isVideoPlaying
                                                     )
@@ -2724,112 +2838,134 @@ fun VideoDetailScreen(
                 "success=${success != null}, isLandscape=$isLandscape")
         }
         
-        if (showPortraitFullscreen && success != null) {
-            val portraitInitialBvid = pendingMainReloadBvidAfterPortrait ?: success.info.bvid
-            // 竖屏全屏模式：使用 Pager 实现无缝滑动 (TikTok Style)
-            com.android.purebilibili.feature.video.ui.pager.PortraitVideoPager(
-                initialBvid = portraitInitialBvid,
-                initialInfo = success.info,
-                recommendations = success.related,
-                onBack = { isPortraitFullscreen = false },
-                onHomeClick = {
-                    isPortraitFullscreen = false
-                    handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
-                },
-                onVideoChange = { newBvid ->
-                    // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。
-                    // 仅记录竖屏会话内当前浏览目标，真正退出时再提交给主播放器。
-                    portraitPendingSelectionBvid = newBvid
-                },
-                viewModel = viewModel,
-                commentViewModel = commentViewModel,
-                sharedPlayer = if (useSharedPortraitPlayer) playerState.player else null,
-                // [新增] 进度同步
-                initialStartPositionMs = portraitSyncSnapshotPositionMs,
-                onProgressUpdate = { bvid, pos, cidSnapshot ->
-                    portraitPendingSelectionBvid = bvid
-                    portraitSyncSnapshotBvid = bvid
-                    portraitSyncSnapshotCid = cidSnapshot
-                    portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
-                    if (shouldMirrorPortraitProgressToMainPlayer) {
-                        hasPendingPortraitSync = true
-                        if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
-                            hasPendingPortraitSync = false
-                        }
-                    }
-                },
-                onExitSnapshot = { bvid, pos, cidSnapshot ->
-                    currentBvid = bvid
-                    currentBvidCid = cidSnapshot
-                    portraitPendingSelectionBvid = bvid
-                    portraitSyncSnapshotBvid = bvid
-                    portraitSyncSnapshotCid = cidSnapshot
-                    portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
-                    pendingMainReloadBvidAfterPortrait = bvid
-                    if (shouldMirrorPortraitProgressToMainPlayer) {
-                        hasPendingPortraitSync = true
-                        if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
-                            hasPendingPortraitSync = false
-                        }
-                    }
-                },
-                onSearchClick = {
-                    hasDeferredPortraitRestoreAfterExternalNavigation =
-                        com.android.purebilibili.feature.video.ui.pager
-                            .shouldDeferPortraitRestoreUntilForegroundResume(
-                                isPortraitFullscreen = isPortraitFullscreen,
-                                isExternalNavigation = true
-                            )
-                    if (com.android.purebilibili.feature.video.ui.pager
-                            .shouldExitPortraitForExternalNavigation(isPortraitFullscreen)
-                    ) {
+        AnimatedVisibility(
+            visible = showPortraitFullscreen && success != null,
+            enter = if (shouldAnimatePortraitPager) {
+                fadeIn(
+                    animationSpec = tween(portraitPagerMotionSpec.enterDurationMillis)
+                )
+            } else {
+                androidx.compose.animation.EnterTransition.None
+            },
+            exit = if (shouldAnimatePortraitPager) {
+                fadeOut(
+                    animationSpec = tween(portraitPagerMotionSpec.exitDurationMillis)
+                ) + scaleOut(
+                    targetScale = portraitPagerMotionSpec.exitScaleTarget,
+                    animationSpec = tween(portraitPagerMotionSpec.exitDurationMillis)
+                )
+            } else {
+                androidx.compose.animation.ExitTransition.None
+            },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            if (success != null) {
+                val portraitInitialBvid = pendingMainReloadBvidAfterPortrait ?: success.info.bvid
+                // 竖屏全屏模式：使用 Pager 实现无缝滑动 (TikTok Style)
+                com.android.purebilibili.feature.video.ui.pager.PortraitVideoPager(
+                    initialBvid = portraitInitialBvid,
+                    initialInfo = success.info,
+                    recommendations = success.related,
+                    onBack = { isPortraitFullscreen = false },
+                    onHomeClick = {
                         isPortraitFullscreen = false
-                    }
-                    onNavigateToSearch()
-                },
-                onUserClick = { mid ->
-                    val anchorBvid = portraitPendingSelectionBvid
-                        ?: pendingMainReloadBvidAfterPortrait
-                        ?: portraitSyncSnapshotBvid
-                        ?: (uiState as? PlayerUiState.Success)?.info?.bvid
-                    if (!anchorBvid.isNullOrBlank()) {
-                        currentBvid = anchorBvid
-                        currentBvidCid = if (anchorBvid == portraitSyncSnapshotBvid) {
-                            portraitSyncSnapshotCid
+                        handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
+                    },
+                    onVideoChange = { newBvid ->
+                        // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。
+                        // 仅记录竖屏会话内当前浏览目标，真正退出时再提交给主播放器。
+                        portraitPendingSelectionBvid = newBvid
+                    },
+                    viewModel = viewModel,
+                    commentViewModel = commentViewModel,
+                    sharedPlayer = if (useSharedPortraitPlayer) playerState.player else null,
+                    // [新增] 进度同步
+                    initialStartPositionMs = portraitSyncSnapshotPositionMs,
+                    onProgressUpdate = { bvid, pos, cidSnapshot ->
+                        portraitPendingSelectionBvid = bvid
+                        portraitSyncSnapshotBvid = bvid
+                        portraitSyncSnapshotCid = cidSnapshot
+                        portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
+                        if (shouldMirrorPortraitProgressToMainPlayer) {
+                            hasPendingPortraitSync = true
+                            if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
+                                hasPendingPortraitSync = false
+                            }
+                        }
+                    },
+                    onExitSnapshot = { bvid, pos, cidSnapshot ->
+                        currentBvid = bvid
+                        currentBvidCid = cidSnapshot
+                        portraitPendingSelectionBvid = bvid
+                        portraitSyncSnapshotBvid = bvid
+                        portraitSyncSnapshotCid = cidSnapshot
+                        portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
+                        pendingMainReloadBvidAfterPortrait = bvid
+                        if (shouldMirrorPortraitProgressToMainPlayer) {
+                            hasPendingPortraitSync = true
+                            if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
+                                hasPendingPortraitSync = false
+                            }
+                        }
+                    },
+                    onSearchClick = {
+                        hasDeferredPortraitRestoreAfterExternalNavigation =
+                            com.android.purebilibili.feature.video.ui.pager
+                                .shouldDeferPortraitRestoreUntilForegroundResume(
+                                    isPortraitFullscreen = isPortraitFullscreen,
+                                    isExternalNavigation = true
+                                )
+                        if (com.android.purebilibili.feature.video.ui.pager
+                                .shouldExitPortraitForExternalNavigation(isPortraitFullscreen)
+                        ) {
+                            isPortraitFullscreen = false
+                        }
+                        onNavigateToSearch()
+                    },
+                    onUserClick = { mid ->
+                        val anchorBvid = portraitPendingSelectionBvid
+                            ?: pendingMainReloadBvidAfterPortrait
+                            ?: portraitSyncSnapshotBvid
+                            ?: (uiState as? PlayerUiState.Success)?.info?.bvid
+                        if (!anchorBvid.isNullOrBlank()) {
+                            currentBvid = anchorBvid
+                            currentBvidCid = if (anchorBvid == portraitSyncSnapshotBvid) {
+                                portraitSyncSnapshotCid
+                            } else {
+                                0L
+                            }
+                            pendingMainReloadBvidAfterPortrait = anchorBvid
+                        }
+                        hasDeferredPortraitRestoreAfterExternalNavigation =
+                            com.android.purebilibili.feature.video.ui.pager
+                                .shouldDeferPortraitRestoreUntilForegroundResume(
+                                    isPortraitFullscreen = isPortraitFullscreen,
+                                    isExternalNavigation = true
+                                )
+                        if (com.android.purebilibili.feature.video.ui.pager
+                                .shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen)
+                        ) {
+                            isPortraitFullscreen = false
+                        }
+                        onUpClick(mid)
+                    },
+                    onRotateToLandscape = {
+                        isPortraitFullscreen = false
+                        val activity = context.findActivity()
+                        val targetOrientation = resolvePortraitRotateTargetOrientation(
+                            isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+                            manualPortraitHoldActive = manualPortraitHoldActive
+                        )
+                        if (activity != null && targetOrientation != null) {
+                            userRequestedFullscreen = true
+                            manualPortraitHoldActive = false
+                            activity.requestedOrientation = targetOrientation
                         } else {
-                            0L
+                            toggleFullscreen()
                         }
-                        pendingMainReloadBvidAfterPortrait = anchorBvid
                     }
-                    hasDeferredPortraitRestoreAfterExternalNavigation =
-                        com.android.purebilibili.feature.video.ui.pager
-                            .shouldDeferPortraitRestoreUntilForegroundResume(
-                                isPortraitFullscreen = isPortraitFullscreen,
-                                isExternalNavigation = true
-                            )
-                    if (com.android.purebilibili.feature.video.ui.pager
-                            .shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen)
-                    ) {
-                        isPortraitFullscreen = false
-                    }
-                    onUpClick(mid)
-                },
-                onRotateToLandscape = {
-                    isPortraitFullscreen = false
-                    val activity = context.findActivity()
-                    val targetOrientation = resolvePortraitRotateTargetOrientation(
-                        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
-                        manualPortraitHoldActive = manualPortraitHoldActive
-                    )
-                    if (activity != null && targetOrientation != null) {
-                        userRequestedFullscreen = true
-                        manualPortraitHoldActive = false
-                        activity.requestedOrientation = targetOrientation
-                    } else {
-                        toggleFullscreen()
-                    }
-                }
-            )
+                )
+            }
         }
 
         InteractiveChoiceOverlay(
@@ -3056,6 +3192,16 @@ fun VideoDetailScreen(
             configuration.screenHeightDp.dp.roundToPx()
         }
         val danmakuDialogTopReserveDp = with(LocalDensity.current) { danmakuDialogTopReservePx.toDp() }
+        val danmakuSendPreferenceScope = rememberCoroutineScope()
+        val rememberedDanmakuSendColor by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuSendColor(context)
+            .collectAsState(initial = 16777215)
+        val rememberedDanmakuSendMode by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuSendMode(context)
+            .collectAsState(initial = 1)
+        val rememberedDanmakuSendFontSize by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuSendFontSize(context)
+            .collectAsState(initial = 25)
         com.android.purebilibili.feature.video.ui.components.DanmakuSendDialog(
             visible = showDanmakuDialog,
             onDismiss = { viewModel.hideDanmakuSendDialog() },
@@ -3064,6 +3210,16 @@ fun VideoDetailScreen(
                 viewModel.sendDanmaku(message, color, mode, fontSize)
             },
             isSending = isSendingDanmaku,
+            initialColor = rememberedDanmakuSendColor,
+            initialMode = rememberedDanmakuSendMode,
+            initialFontSize = rememberedDanmakuSendFontSize,
+            onSelectionChange = { color, mode, fontSize ->
+                danmakuSendPreferenceScope.launch {
+                    com.android.purebilibili.core.store.SettingsManager.setDanmakuSendColor(context, color)
+                    com.android.purebilibili.core.store.SettingsManager.setDanmakuSendMode(context, mode)
+                    com.android.purebilibili.core.store.SettingsManager.setDanmakuSendFontSize(context, fontSize)
+                }
+            },
             topReservedSpace = danmakuDialogTopReserveDp
         )
         
@@ -3082,8 +3238,9 @@ fun VideoDetailScreen(
             canUploadImage = commentState.canUploadImage,
             canInputComment = commentState.canInputComment,
             emotePackages = emotePackages, // [新增]
-            onSend = { message, imageUris ->
-                viewModel.sendComment(message, imageUris)
+            currentVideoPositionMsProvider = { playerState.player.currentPosition.coerceAtLeast(0L) },
+            onSend = { message, imageUris, syncToDynamic ->
+                viewModel.sendComment(message, imageUris, syncToDynamic)
                 viewModel.hideCommentInputDialog()
             }
         )
@@ -3126,7 +3283,7 @@ fun VideoDetailScreen(
                             .fillMaxWidth()
                             .clickable {
                                 // 检查任务状态
-                                val existingTask = com.android.purebilibili.feature.download.DownloadManager.getTask(successForDownload.info.bvid, successForDownload.info.cid)
+                                val existingTask = com.android.purebilibili.feature.download.DownloadManager.getVideoTask(successForDownload.info.bvid, successForDownload.info.cid)
                                 if (existingTask != null && !existingTask.isFailed) {
                                     if (existingTask.isComplete) viewModel.toast("视频已缓存")
                                     else viewModel.toast("正在下载中...")
@@ -3209,7 +3366,8 @@ fun VideoDetailScreen(
                                     qualityDesc = "音频",
                                     videoUrl = "",
                                     audioUrl = successForDownload.audioUrl ?: "",
-                                    isAudioOnly = true
+                                    isAudioOnly = true,
+                                    isVerticalVideo = false
                                 )
                                 if (task.audioUrl.isNotEmpty()) {
                                     val started = com.android.purebilibili.feature.download.DownloadManager.addTask(task)
@@ -3351,28 +3509,35 @@ fun VideoDetailScreen(
         }
         
         val successState = uiState as? PlayerUiState.Success
-        VideoCommentSheetHost(
-            mainSheetVisible = false,
-            onDismiss = { commentViewModel.closeSubReply() },
-            commentViewModel = commentViewModel,
-            aid = successState?.info?.aid ?: 0L,
-            upMid = commentState.upMid,
-            expectedReplyCount = commentState.replyCount,
-            emoteMap = successState?.emoteMap ?: emptyMap(),
-            onRootCommentClick = { viewModel.openRootCommentComposer() },
-            onReplyClick = { replyItem ->
-                android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
-                viewModel.setReplyingTo(replyItem)
-                viewModel.showCommentInputDialog()
-            },
-            onUserClick = onUpClick,
-            screenHeightPx = screenHeightPx,
-            topReservedPx = danmakuDialogTopReservePx,
-            onTimestampClick = { positionMs ->
-                seekPlayerFromUserAction(playerState.player, positionMs)
-                commentViewModel.closeSubReply()
-            }
-        )
+        if (shouldShowDetachedVideoCommentThreadHost(useTabletLayout = useTabletLayout)) {
+            VideoCommentSheetHost(
+                mainSheetVisible = false,
+                onDismiss = { commentViewModel.closeSubReply() },
+                commentViewModel = commentViewModel,
+                aid = successState?.info?.aid ?: 0L,
+                upMid = commentState.upMid,
+                expectedReplyCount = commentState.replyCount,
+                emoteMap = successState?.emoteMap ?: emptyMap(),
+                onRootCommentClick = { viewModel.openRootCommentComposer() },
+                onReplyClick = { replyItem ->
+                    android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
+                    viewModel.setReplyingTo(replyItem)
+                    viewModel.showCommentInputDialog()
+                },
+                onUserClick = onUpClick,
+                onVideoClick = { targetVideoId ->
+                    navigateToRelatedVideo(targetVideoId, null)
+                },
+                onSearchKeywordClick = onSearchKeywordClick,
+                screenHeightPx = screenHeightPx,
+                topReservedPx = danmakuDialogTopReservePx,
+                onTimestampClick = { positionMs ->
+                    seekPlayerFromUserAction(playerState.player, positionMs)
+                    commentViewModel.closeSubReply()
+                },
+                maxTimestampMs = successState?.videoDurationMs?.takeIf { it > 0L }
+            )
+        }
 
         // 📁 收藏夹选择弹窗
         if (showFavoriteFolderDialog) {
@@ -3530,17 +3695,61 @@ fun VideoDetailScreen(
                 voteLoading = danmakuMenuState.voteLoading,
                 canVote = danmakuMenuState.canVote,
                 canRecall = danmakuMenuState.isSelf,
+                canBlockKeyword = danmakuMenuState.text.isNotBlank(),
+                onBlockKeyword = {
+                    val updatedRules = appendDanmakuKeywordBlockRule(
+                        rawRules = activeDanmakuBlockRulesRaw,
+                        keyword = danmakuMenuState.text
+                    )
+                    val changed = updatedRules != activeDanmakuBlockRulesRaw
+                    sortPreferenceScope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuBlockRulesRaw(
+                            context,
+                            updatedRules,
+                            activeDanmakuScope
+                        )
+                    }
+                    viewModel.toast(
+                        resolveDanmakuBlockActionFeedbackMessage(
+                            target = DanmakuBlockActionTarget.KEYWORD,
+                            changed = changed
+                        )
+                    )
+                },
+                canBlockUser = danmakuMenuState.userHash.isNotBlank(),
                 onBlockUser = {
-                    viewModel.toast("暂不支持屏蔽用户")
+                    val userHash = danmakuMenuState.userHash
+                    if (userHash.isBlank()) {
+                        viewModel.toast("该弹幕缺少发送者标识")
+                    } else {
+                        val updatedRules = appendDanmakuUserHashBlockRule(
+                            rawRules = activeDanmakuBlockRulesRaw,
+                            userHash = userHash
+                        )
+                        val changed = updatedRules != activeDanmakuBlockRulesRaw
+                        sortPreferenceScope.launch {
+                            com.android.purebilibili.core.store.SettingsManager.setDanmakuBlockRulesRaw(
+                                context,
+                                updatedRules,
+                                activeDanmakuScope
+                            )
+                        }
+                        viewModel.toast(
+                            resolveDanmakuBlockActionFeedbackMessage(
+                                target = DanmakuBlockActionTarget.USER,
+                                changed = changed
+                            )
+                        )
+                    }
                 }
             )
         }
         
         // 🔗 绑定弹幕点击监听器
         LaunchedEffect(danmakuManager) {
-            danmakuManager.setOnDanmakuClickListener { text, dmid, uid, isSelf ->
+            danmakuManager.setOnDanmakuClickListener { text, dmid, userHash, isSelf ->
                 android.util.Log.d("VideoDetailScreen", "👆 Danmaku clicked: $text")
-                viewModel.showDanmakuMenu(dmid, text, uid, isSelf)
+                viewModel.showDanmakuMenu(dmid, text, userHash, isSelf)
             }
         }
     }
@@ -3884,6 +4093,12 @@ internal fun shouldUseOrientationDrivenFullscreen(
     useTabletLayout: Boolean
 ): Boolean {
     return !useTabletLayout 
+}
+
+internal fun shouldShowDetachedVideoCommentThreadHost(
+    useTabletLayout: Boolean
+): Boolean {
+    return !useTabletLayout
 }
 
 internal fun shouldApplyPhoneAutoRotatePolicy(

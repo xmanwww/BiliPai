@@ -27,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
@@ -92,6 +93,8 @@ fun TabletVideoLayout(
     onAudioQualityChange: (Int) -> Unit = {},
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    showUpBadge: Boolean = true,
+    onSearchKeywordClick: (String) -> Unit = {},
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
@@ -273,7 +276,9 @@ fun TabletVideoLayout(
                     onPaneModeCycle = {
                         secondaryPaneModeName = nextTabletSecondaryPaneMode(secondaryPaneMode).name
                     },
-                    onRelatedVideoClick = onRelatedVideoClick
+                    onRelatedVideoClick = onRelatedVideoClick,
+                    showUpBadge = showUpBadge,
+                    onSearchKeywordClick = onSearchKeywordClick
                 )
             }
         },
@@ -295,7 +300,9 @@ private fun TabletSecondaryContent(
     paneMode: TabletSecondaryPaneMode,
     onPaneModeChange: (TabletSecondaryPaneMode) -> Unit,
     onPaneModeCycle: () -> Unit,
-    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    showUpBadge: Boolean,
+    onSearchKeywordClick: (String) -> Unit
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
     var selectedTab by rememberSaveable(success.info.bvid) {
@@ -310,6 +317,7 @@ private fun TabletSecondaryContent(
         initialPage = selectedTab,
         pageCount = { 2 }
     )
+    val subReplyState by commentViewModel.subReplyState.collectAsState()
     val tabs = listOf("评论 ${if (commentState.replyCount > 0) "(${commentState.replyCount})" else ""}", "相关推荐")
     
     // 评论图片预览状态
@@ -332,24 +340,35 @@ private fun TabletSecondaryContent(
             selectedTab = pagerState.currentPage
         }
     }
+    LaunchedEffect(subReplyState.visible) {
+        if (subReplyState.visible) {
+            selectedTab = 0
+            if (paneMode == TabletSecondaryPaneMode.COLLAPSED) {
+                onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
+            }
+        }
+    }
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
 
-        val parsedResult = com.android.purebilibili.core.util.BilibiliUrlParser.parse(url)
-        if (parsedResult.bvid != null) {
-            onRelatedVideoClick(parsedResult.bvid, null)
-            return@openCommentUrl
-        }
+        when (val target = resolveCommentUrlNavigationTarget(url)) {
+            is CommentUrlNavigationTarget.Video -> {
+                onRelatedVideoClick(target.videoId, null)
+                return@openCommentUrl
+            }
 
-        if (shouldOpenCommentUrlInApp(url)) {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching {
-                context.startActivity(intent)
-            }.isSuccess
-            if (launchedInApp) return@openCommentUrl
+            is CommentUrlNavigationTarget.Search -> {
+                onSearchKeywordClick(target.keyword)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Space -> {
+                onUpClick(target.mid)
+                return@openCommentUrl
+            }
+
+            null -> Unit
         }
 
         runCatching { uriHandler.openUri(url) }
@@ -464,7 +483,40 @@ private fun TabletSecondaryContent(
                         if (shouldLoadMore) commentViewModel.loadComments()
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    if (subReplyState.visible && subReplyState.rootReply != null) {
+                        VideoInlineSubReplyDetailContent(
+                            state = subReplyState,
+                            commentState = commentState,
+                            emoteMap = success.emoteMap,
+                            maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
+                            onLoadMore = { commentViewModel.loadMoreSubReplies() },
+                            onDismiss = { commentViewModel.closeSubReply() },
+                            onRootCommentClick = { viewModel.openRootCommentComposer() },
+                            onTimestampClick = { positionMs ->
+                                seekPlayerFromUserAction(playerState.player, positionMs)
+                            },
+                            onImagePreview = { images, index, rect, textContent ->
+                                previewImages = images
+                                previewInitialIndex = index
+                                sourceRect = rect
+                                previewTextContent = textContent
+                                showImagePreview = true
+                            },
+                            onReplyClick = { reply ->
+                                viewModel.setReplyingTo(reply)
+                                viewModel.showCommentInputDialog()
+                            },
+                            onConversationClick = commentViewModel::openSubReplyConversation,
+                            onConversationBack = commentViewModel::closeSubReplyConversation,
+                            onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
+                            onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
+                            onCommentLike = commentViewModel::likeComment,
+                            onReportComment = commentViewModel::reportComment,
+                            onUrlClick = openCommentUrl,
+                            onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
@@ -518,11 +570,13 @@ private fun TabletSecondaryContent(
                                         emoteMap = success.emoteMap,
                                         upMid = success.info.owner.mid,
                                         showUpFlag = commentState.showUpFlag,
+                                        isPinned = reply.rpid in commentState.pinnedReplyIds,
                                         onClick = {},
                                         onSubClick = { commentViewModel.openSubReply(it) },
                                         onTimestampClick = { positionMs ->
                                             seekPlayerFromUserAction(playerState.player, positionMs)
                                         },
+                                        maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
                                         onImagePreview = { images, index, rect, textContent ->
                                             previewImages = images
                                             previewInitialIndex = index
@@ -536,6 +590,13 @@ private fun TabletSecondaryContent(
                                             viewModel.setReplyingTo(reply)
                                             viewModel.showCommentInputDialog()
                                         },
+                                        onReportClick = { reason -> commentViewModel.reportComment(reply.rpid, reason) },
+                                        canToggleTop = shouldShowReplyTopAction(
+                                            currentMid = commentState.currentMid,
+                                            upMid = success.info.owner.mid,
+                                            item = reply
+                                        ),
+                                        onToggleTopClick = { commentViewModel.toggleTopComment(reply) },
                                         onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
                                             { commentViewModel.startDissolve(reply.rpid) }
                                         } else null,
@@ -617,6 +678,7 @@ private fun TabletSecondaryContent(
                             }
                         }
                     }
+                    }
                 }
 
                 1 -> {
@@ -631,6 +693,7 @@ private fun TabletSecondaryContent(
                             RelatedVideoItem(
                                 video = video,
                                 isFollowed = video.owner.mid in success.followingMids,
+                                showUpBadge = showUpBadge,
                                 onClick = {
                                     val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
                                     val options = activity?.let {
@@ -751,7 +814,14 @@ private fun ScrollableVideoInfoSection(
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
                 downloadProgress = downloadProgress ?: -1f,
-                onCommentClick = { /* 平板模式不需要跳转评论 */ }
+                onCommentClick = { /* 平板模式不需要跳转评论 */ },
+                onShareClick = {
+                    ShareUtils.shareVideo(
+                        context,
+                        info.title,
+                        info.bvid
+                    )
+                }
             )
         }
 

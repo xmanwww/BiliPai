@@ -18,3 +18,14 @@ internal fun resolveUpStatsText(
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
+
+internal fun shouldRenderUpBadgeTrailingSlot(
+    hasTrailingContent: Boolean,
+    reserveTrailingSlot: Boolean
+): Boolean {
+    return hasTrailingContent || reserveTrailingSlot
+}
+
+internal fun shouldRenderUserUpBadge(showUpBadge: Boolean): Boolean {
+    return showUpBadge
+}

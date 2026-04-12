@@ -12,6 +12,15 @@ import com.android.purebilibili.data.model.VideoQuality
  * 用于检测网络类型，实现网络感知的清晰度默认值
  */
 object NetworkUtils {
+
+    fun isNetworkAvailable(context: Context): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }
     
     /**
      * 检查当前是否使用 WiFi 网络
@@ -112,6 +121,16 @@ internal fun resolvePlaybackDefaultQualityId(
         isLoggedIn = isLoggedIn,
         isVip = isVip
     )
+}
+
+internal fun shouldRefreshVipStatusBeforeResolvingDefaultQuality(
+    storedQuality: Int,
+    autoHighestEnabled: Boolean,
+    isLoggedIn: Boolean,
+    cachedIsVip: Boolean
+): Boolean {
+    if (!isLoggedIn || cachedIsVip) return false
+    return autoHighestEnabled || storedQuality > 80
 }
 
 internal fun resolvePlayableDefaultQualityId(

@@ -63,6 +63,7 @@ import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedT
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
+import com.android.purebilibili.feature.home.resolveHomeGlassCoverPillBaseColor
 import com.android.purebilibili.feature.video.ui.section.resolvePublishTimeRowText
 import com.android.purebilibili.feature.video.ui.section.shouldEmphasizePrecisePublishTime
 //  [预览播放] 相关引用已移除
@@ -145,6 +146,7 @@ fun ElegantVideoCard(
     compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
+    showUpBadge: Boolean = true,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
@@ -174,13 +176,13 @@ fun ElegantVideoCard(
         glassEnabled = glassEnabled,
         blurEnabled = blurEnabled,
         emphasized = false,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val emphasizedCoverPillColors = rememberHomeGlassPillColors(
         glassEnabled = glassEnabled,
         blurEnabled = blurEnabled,
         emphasized = true,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val inlinePillColors = rememberHomeGlassPillColors(
         glassEnabled = glassEnabled,
@@ -889,6 +891,8 @@ fun ElegantVideoCard(
                 metaColor = MaterialTheme.colorScheme.primary,
                 badgeTextColor = iOSSystemGray.copy(alpha = 0.85f),
                 badgeBorderColor = iOSSystemGray.copy(alpha = 0.4f),
+                reserveTrailingSlot = true,
+                showUpBadge = showUpBadge,
                 modifier = upNameModifier
             )
             

@@ -16,7 +16,6 @@ import androidx.compose.animation.togetherWith
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -27,7 +26,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -65,8 +66,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.ui.motion.continuityTween
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
+import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
@@ -96,12 +101,15 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.data.model.response.HotItem
 import com.android.purebilibili.data.model.response.SearchArticleItem
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 internal fun shouldShowSearchHotSection(
     hotItemCount: Int,
@@ -134,9 +142,18 @@ internal data class SearchChromeVisualSpec(
 )
 
 internal fun resolveSearchChromeVisualSpec(
-    uiPreset: UiPreset
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): SearchChromeVisualSpec {
-    return if (uiPreset == UiPreset.MD3) {
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        SearchChromeVisualSpec(
+            inputHeightDp = 46,
+            inputCornerRadiusDp = 23,
+            actionContainerCornerRadiusDp = 18,
+            useFilledSearchAction = true,
+            suggestionContainerCornerRadiusDp = 18
+        )
+    } else if (uiPreset == UiPreset.MD3) {
         SearchChromeVisualSpec(
             inputHeightDp = 48,
             inputCornerRadiusDp = 28,
@@ -201,6 +218,13 @@ internal fun shouldApplyInitialSearchKeyword(
     return normalizedKeyword != currentQuery || !showResults
 }
 
+internal fun shouldResetSearchResultScroll(
+    searchSessionId: Long,
+    showResults: Boolean
+): Boolean {
+    return showResults && searchSessionId > 0L
+}
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
@@ -217,7 +241,10 @@ fun SearchScreen(
     onAvatarClick: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
-    val searchChromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val searchChromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     val state by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val configuration = LocalConfiguration.current
@@ -233,8 +260,19 @@ fun SearchScreen(
 
     // 1. 滚动状态监听 (用于列表)
     val historyListState = rememberLazyListState()
-    val resultGridState = rememberLazyGridState()
-    val resultListState = rememberLazyListState()
+    val resultStateKey = remember(state.searchSessionId, state.searchType) {
+        state.searchSessionId to state.searchType
+    }
+    val resultGridState = remember(resultStateKey) { LazyGridState() }
+    val resultListState = remember(resultStateKey) { LazyListState() }
+
+    LaunchedEffect(resultStateKey, state.showResults) {
+        if (!shouldResetSearchResultScroll(searchSessionId = state.searchSessionId, showResults = state.showResults)) {
+            return@LaunchedEffect
+        }
+        resultListState.scrollToItem(0)
+        resultGridState.scrollToItem(0)
+    }
 
     // ✨ Haze State
     val hazeState = rememberRecoverableHazeState()
@@ -283,9 +321,10 @@ fun SearchScreen(
             showHomeInfoGlassBadges = showHomeInfoGlassBadges
         )
     }
-    val genericResultCardAppearance = remember(liquidGlassEnabled) {
+    val genericResultCardAppearance = remember(liquidGlassEnabled, uiPreset) {
         resolveSearchResultCardAppearance(
-            liquidGlassEnabled = liquidGlassEnabled
+            liquidGlassEnabled = liquidGlassEnabled,
+            uiPreset = uiPreset
         )
     }
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = false)
@@ -361,7 +400,7 @@ fun SearchScreen(
         extraBottomPadding = 16.dp
     )
 
-    Scaffold(
+    AdaptiveScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent,
         //  移除 bottomBar，搜索栏现在位于顶部 Box 中
@@ -876,8 +915,6 @@ fun SearchScreen(
                     widthDp = configuration.screenWidthDp
                 )
 
-                val enterEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-                val exitEasing = CubicBezierEasing(0.32f, 0f, 0.67f, 0f)
                 val enterOffsetPx = with(density) { searchHomeMotionSpec.enterOffsetDp.dp.roundToPx() }
                 val exitOffsetPx = with(density) { searchHomeMotionSpec.exitOffsetDp.dp.roundToPx() }
 
@@ -895,26 +932,22 @@ fun SearchScreen(
                             exitOffsetPx
                         }
                         val targetEnter = fadeIn(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.fadeInDurationMillis,
-                                easing = enterEasing
+                            animationSpec = emphasizedEnterTween(
+                                searchHomeMotionSpec.fadeInDurationMillis
                             )
                         ) + slideInVertically(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.sizeTransformDurationMillis,
-                                easing = enterEasing
+                            animationSpec = emphasizedEnterTween(
+                                searchHomeMotionSpec.sizeTransformDurationMillis
                             ),
                             initialOffsetY = { resolvedEnterOffset }
                         )
                         val initialExit = fadeOut(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.fadeOutDurationMillis,
-                                easing = exitEasing
+                            animationSpec = emphasizedExitTween(
+                                searchHomeMotionSpec.fadeOutDurationMillis
                             )
                         ) + slideOutVertically(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.fadeOutDurationMillis,
-                                easing = exitEasing
+                            animationSpec = emphasizedExitTween(
+                                searchHomeMotionSpec.fadeOutDurationMillis
                             ),
                             targetOffsetY = { resolvedExitOffset }
                         )
@@ -924,9 +957,8 @@ fun SearchScreen(
                             sizeTransform = SizeTransform(
                                 clip = false,
                                 sizeAnimationSpec = { _, _ ->
-                                    tween(
-                                        durationMillis = searchHomeMotionSpec.sizeTransformDurationMillis,
-                                        easing = enterEasing
+                                    continuityTween(
+                                        searchHomeMotionSpec.sizeTransformDurationMillis
                                     )
                                 }
                             )
@@ -1139,8 +1171,11 @@ fun SearchTopBar(
     modifier: Modifier = Modifier
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val layoutSpec = remember { resolveSearchTopBarLayoutSpec() }
-    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val chromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     val backIcon = rememberAppBackIcon()
     val searchIcon = rememberAppSearchIcon()
     val clearIcon = rememberAppClearIcon()
@@ -1209,7 +1244,9 @@ fun SearchTopBar(
                             shape = RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp)
                         )
                         .background(
-                            if (uiPreset == UiPreset.MD3) {
+                            if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+                                MiuixTheme.colorScheme.surfaceContainerHigh
+                            } else if (uiPreset == UiPreset.MD3) {
                                 MaterialTheme.colorScheme.surfaceContainerHigh
                             } else {
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
@@ -1312,13 +1349,18 @@ fun HistoryChip(
     onDelete: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val historyIcon = rememberAppHistoryIcon()
     val clearIcon = rememberAppClearIcon()
     val deleteLabel = stringResource(R.string.common_delete)
-    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val chromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     Surface(
         onClick = onClick,
-        color = if (uiPreset == UiPreset.MD3) {
+        color = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            MiuixTheme.colorScheme.surfaceContainerHigh
+        } else if (uiPreset == UiPreset.MD3) {
             MaterialTheme.colorScheme.surfaceContainerHigh
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -1952,15 +1994,29 @@ private fun SearchResultCardSurface(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
     Surface(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = appearance.containerAlpha),
-        shape = RoundedCornerShape(12.dp),
-        tonalElevation = appearance.tonalElevationDp.dp,
-        shadowElevation = appearance.shadowElevationDp.dp,
+        color = if (isMiuix) {
+            MiuixTheme.colorScheme.surfaceContainer
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = appearance.containerAlpha)
+        },
+        shape = RoundedCornerShape(if (isMiuix) 18.dp else 12.dp),
+        tonalElevation = if (isMiuix) 0.dp else appearance.tonalElevationDp.dp,
+        shadowElevation = if (isMiuix) 0.dp else appearance.shadowElevationDp.dp,
         border = if (appearance.borderAlpha > 0f) {
-            androidx.compose.foundation.BorderStroke(0.8.dp, Color.White.copy(alpha = appearance.borderAlpha))
+            androidx.compose.foundation.BorderStroke(
+                0.8.dp,
+                if (isMiuix) {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+                } else {
+                    Color.White.copy(alpha = appearance.borderAlpha)
+                }
+            )
         } else {
             null
         }

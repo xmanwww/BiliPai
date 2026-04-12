@@ -6,20 +6,30 @@ internal fun resolveEffectiveLiquidGlassEnabled(
     requestedEnabled: Boolean,
     uiPreset: UiPreset
 ): Boolean {
-    return requestedEnabled && uiPreset != UiPreset.MD3
+    return requestedEnabled
 }
 
 internal fun resolveEffectiveHomeSettings(
     homeSettings: HomeSettings,
     uiPreset: UiPreset
 ): HomeSettings {
-    val effectiveLiquidGlassEnabled = resolveEffectiveLiquidGlassEnabled(
-        requestedEnabled = homeSettings.isLiquidGlassEnabled,
+    val effectiveTopBarLiquidGlassEnabled = resolveEffectiveLiquidGlassEnabled(
+        requestedEnabled = homeSettings.isTopBarLiquidGlassEnabled,
         uiPreset = uiPreset
     )
-    return if (effectiveLiquidGlassEnabled == homeSettings.isLiquidGlassEnabled) {
+    val effectiveBottomBarLiquidGlassEnabled = resolveEffectiveLiquidGlassEnabled(
+        requestedEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
+        uiPreset = uiPreset
+    )
+    return if (
+        effectiveTopBarLiquidGlassEnabled == homeSettings.isTopBarLiquidGlassEnabled &&
+        effectiveBottomBarLiquidGlassEnabled == homeSettings.isBottomBarLiquidGlassEnabled
+    ) {
         homeSettings
     } else {
-        homeSettings.copy(isLiquidGlassEnabled = effectiveLiquidGlassEnabled)
+        homeSettings.copy(
+            isTopBarLiquidGlassEnabled = effectiveTopBarLiquidGlassEnabled,
+            isBottomBarLiquidGlassEnabled = effectiveBottomBarLiquidGlassEnabled
+        )
     }
 }

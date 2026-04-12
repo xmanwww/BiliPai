@@ -55,6 +55,7 @@ import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
+import com.android.purebilibili.feature.home.resolveHomeGlassCoverPillBaseColor
 
 /**
  *  玻璃拟态卡片 - Vision Pro 风格 (性能优化版)
@@ -76,6 +77,7 @@ fun GlassVideoCard(
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
+    showUpBadge: Boolean = true,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onClick: (String, Long) -> Unit
 ) {
@@ -99,13 +101,13 @@ fun GlassVideoCard(
         glassEnabled = true,
         blurEnabled = true,
         emphasized = false,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val emphasizedCoverPillColors = rememberHomeGlassPillColors(
         glassEnabled = true,
         blurEnabled = true,
         emphasized = true,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val inlinePillColors = rememberHomeGlassPillColors(
         glassEnabled = true,
@@ -440,6 +442,7 @@ fun GlassVideoCard(
                             nameColor = onSurfaceVariant,
                             badgeTextColor = onSurfaceVariant.copy(alpha = 0.85f),
                             badgeBorderColor = onSurfaceVariant.copy(alpha = 0.35f),
+                            showUpBadge = showUpBadge,
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         

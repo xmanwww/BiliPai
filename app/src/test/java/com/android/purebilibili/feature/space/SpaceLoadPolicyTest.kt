@@ -199,4 +199,151 @@ class SpaceLoadPolicyTest {
         assertEquals("BVSEASON", updated.seasonArchives.getValue(1L).single().bvid)
         assertEquals("BVSERIES", updated.seriesArchives.getValue(2L).single().bvid)
     }
+
+    @Test
+    fun `shouldHydrateSpaceContributionVideos hydrates when seeded videos are missing`() {
+        assertTrue(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 0,
+                pageSize = 30,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertTrue(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 20,
+                pageSize = 30,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertFalse(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 30,
+                pageSize = 30,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertFalse(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 0,
+                pageSize = 30,
+                selectedSubTab = SpaceSubTab.AUDIO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertFalse(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 0,
+                seededVideoCount = 0,
+                pageSize = 30,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+    }
+
+    @Test
+    fun `buildInitialSpaceSuccessState keeps first video paint in loading state when hydration is needed`() {
+        val state = buildInitialSpaceSuccessState(
+            seed = SpaceInitialSeed(
+                userInfo = SpaceUserInfo(mid = 42L, name = "UP"),
+                relationStat = null,
+                upStat = null,
+                videos = emptyList(),
+                totalVideos = 133,
+                audios = emptyList(),
+                totalAudios = 0,
+                articles = emptyList(),
+                totalArticles = 0,
+                defaultMainTab = SpaceMainTab.CONTRIBUTION,
+                defaultSubTab = SpaceSubTab.VIDEO
+            ),
+            selectedMainTab = SpaceMainTab.CONTRIBUTION,
+            selectedSubTab = SpaceSubTab.VIDEO
+        )
+
+        assertTrue(state.isLoadingMore)
+        assertEquals(133, state.totalVideos)
+        assertTrue(state.videos.isEmpty())
+    }
+
+    @Test
+    fun `shouldApplySpaceVideoResult requires matching list generation and filters`() {
+        assertTrue(
+            shouldApplySpaceVideoResult(
+                requestMid = 42L,
+                activeMid = 42L,
+                requestGeneration = 3L,
+                activeGeneration = 3L,
+                requestTid = 0,
+                activeTid = 0,
+                requestOrder = VideoSortOrder.PUBDATE,
+                activeOrder = VideoSortOrder.PUBDATE,
+                requestKeyword = "test",
+                activeKeyword = "test"
+            )
+        )
+        assertFalse(
+            shouldApplySpaceVideoResult(
+                requestMid = 42L,
+                activeMid = 42L,
+                requestGeneration = 3L,
+                activeGeneration = 4L,
+                requestTid = 0,
+                activeTid = 0,
+                requestOrder = VideoSortOrder.PUBDATE,
+                activeOrder = VideoSortOrder.PUBDATE,
+                requestKeyword = "test",
+                activeKeyword = "test"
+            )
+        )
+        assertFalse(
+            shouldApplySpaceVideoResult(
+                requestMid = 42L,
+                activeMid = 42L,
+                requestGeneration = 3L,
+                activeGeneration = 3L,
+                requestTid = 1,
+                activeTid = 0,
+                requestOrder = VideoSortOrder.PUBDATE,
+                activeOrder = VideoSortOrder.PUBDATE,
+                requestKeyword = "test",
+                activeKeyword = "test"
+            )
+        )
+    }
+
+    @Test
+    fun `mergeSpaceVideoPages preserves order and removes duplicates`() {
+        val merged = mergeSpaceVideoPages(
+            existing = listOf(
+                SpaceVideoItem(aid = 1L, bvid = "BV1"),
+                SpaceVideoItem(aid = 2L, bvid = "BV2")
+            ),
+            incoming = listOf(
+                SpaceVideoItem(aid = 2L, bvid = "BV2"),
+                SpaceVideoItem(aid = 3L, bvid = "BV3"),
+                SpaceVideoItem(aid = 1L, bvid = "BV1")
+            )
+        )
+
+        assertEquals(listOf("BV1", "BV2", "BV3"), merged.map { it.bvid })
+    }
 }

@@ -656,6 +656,56 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun longPressExclusiveDrag_onlyConsumesBeforeSpeedIsLocked() {
+        assertTrue(
+            shouldConsumeExclusiveLongPressSpeedDrag(
+                isLongPressing = true,
+                longPressSpeedLocked = false
+            )
+        )
+        assertFalse(
+            shouldConsumeExclusiveLongPressSpeedDrag(
+                isLongPressing = true,
+                longPressSpeedLocked = true
+            )
+        )
+        assertFalse(
+            shouldConsumeExclusiveLongPressSpeedDrag(
+                isLongPressing = false,
+                longPressSpeedLocked = false
+            )
+        )
+    }
+
+    @Test
+    fun lockedLongPressSpeed_reappliesWhenPlaybackSpeedUnexpectedlyResets() {
+        assertTrue(
+            shouldReapplyLockedLongPressSpeed(
+                longPressSpeedLocked = true,
+                isLongPressing = false,
+                observedPlaybackSpeed = 1.0f,
+                lockedLongPressSpeed = 2.0f
+            )
+        )
+        assertFalse(
+            shouldReapplyLockedLongPressSpeed(
+                longPressSpeedLocked = true,
+                isLongPressing = true,
+                observedPlaybackSpeed = 1.0f,
+                lockedLongPressSpeed = 2.0f
+            )
+        )
+        assertFalse(
+            shouldReapplyLockedLongPressSpeed(
+                longPressSpeedLocked = false,
+                isLongPressing = false,
+                observedPlaybackSpeed = 1.0f,
+                lockedLongPressSpeed = 2.0f
+            )
+        )
+    }
+
+    @Test
     fun longPressRelease_restoresOriginalSpeedOnlyWhenNotLocked() {
         assertTrue(
             shouldRestorePlaybackParametersAfterLongPressRelease(
@@ -715,6 +765,20 @@ class VideoPlayerSectionPolicyTest {
                 isScreenLocked = false,
                 scale = 1f,
                 isMultiTouchActive = false
+            )
+        )
+    }
+
+    @Test
+    fun viewportTransformGesture_disabledDuringPlaybackEvenWhenUnlocked() {
+        assertFalse(
+            shouldEnableViewportTransformGesture(
+                isScreenLocked = false
+            )
+        )
+        assertFalse(
+            shouldEnableViewportTransformGesture(
+                isScreenLocked = true
             )
         )
     }

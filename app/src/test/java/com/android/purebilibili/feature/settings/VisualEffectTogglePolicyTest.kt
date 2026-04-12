@@ -10,6 +10,28 @@ import kotlin.test.assertTrue
 class VisualEffectTogglePolicyTest {
 
     @Test
+    fun `enabling top bar blur disables top liquid glass`() {
+        val result = resolveTopBarBlurToggleState(
+            enableHeaderBlur = true,
+            currentLiquidGlassEnabled = true
+        )
+
+        assertTrue(result.headerBlurEnabled)
+        assertFalse(result.liquidGlassEnabled)
+    }
+
+    @Test
+    fun `enabling top liquid glass disables header blur`() {
+        val result = resolveTopBarLiquidGlassToggleState(
+            enableLiquidGlass = true,
+            currentHeaderBlurEnabled = true
+        )
+
+        assertTrue(result.liquidGlassEnabled)
+        assertFalse(result.headerBlurEnabled)
+    }
+
+    @Test
     fun `enabling bottom bar blur disables liquid glass`() {
         val result = resolveBottomBarBlurToggleState(
             enableBottomBarBlur = true,
@@ -73,8 +95,8 @@ class VisualEffectTogglePolicyTest {
     }
 
     @Test
-    fun `md3 preset always forces liquid glass off`() {
-        assertFalse(
+    fun `android native preset preserves liquid glass when enabled`() {
+        assertTrue(
             resolveEffectiveLiquidGlassEnabled(
                 requestedEnabled = true,
                 uiPreset = UiPreset.MD3
@@ -89,7 +111,7 @@ class VisualEffectTogglePolicyTest {
     }
 
     @Test
-    fun `ios preset preserves the stored liquid glass preference`() {
+    fun `ios preset also preserves the stored liquid glass preference`() {
         assertEquals(
             true,
             resolveEffectiveLiquidGlassEnabled(

@@ -1,12 +1,14 @@
 package com.android.purebilibili.feature.video.playback.session
 
+import androidx.media3.common.Player
 import com.android.purebilibili.feature.video.state.shouldRestorePlayerVolumeOnResume
 import com.android.purebilibili.feature.video.state.shouldResumeAfterLifecyclePause
 
 internal data class PlaybackPauseDecision(
     val shouldContinuePlayback: Boolean,
     val shouldPausePlayback: Boolean,
-    val shouldMarkBackgroundAudioSession: Boolean
+    val shouldMarkBackgroundAudioSession: Boolean,
+    val shouldPersistTransientResumeIntent: Boolean
 )
 
 internal data class PlaybackResumeDecision(
@@ -21,7 +23,7 @@ internal fun resolveShouldContinuePlaybackDuringPause(
     wasPlaybackActive: Boolean
 ): Boolean {
     if (isMiniMode || isPip) return true
-    return isBackgroundAudio && wasPlaybackActive
+    return isBackgroundAudio
 }
 
 internal fun resolvePlaybackPauseDecision(
@@ -40,12 +42,14 @@ internal fun resolvePlaybackPauseDecision(
     return PlaybackPauseDecision(
         shouldContinuePlayback = shouldContinuePlayback,
         shouldPausePlayback = !shouldContinuePlayback,
-        shouldMarkBackgroundAudioSession = isBackgroundAudio && hasRecentUserLeaveHint
+        shouldMarkBackgroundAudioSession = isBackgroundAudio && hasRecentUserLeaveHint,
+        shouldPersistTransientResumeIntent = wasPlaybackActive && !shouldContinuePlayback
     )
 }
 
 internal fun resolvePlaybackResumeDecision(
     wasPlaybackActive: Boolean,
+    hasTransientResumeIntent: Boolean,
     isPlaying: Boolean,
     playWhenReady: Boolean,
     playbackState: Int,
@@ -60,12 +64,19 @@ internal fun resolvePlaybackResumeDecision(
         )
     }
 
-    val shouldResumePlayback = shouldResumeAfterLifecyclePause(
-        wasPlaybackActive = wasPlaybackActive,
-        isPlaying = isPlaying,
-        playWhenReady = playWhenReady,
-        playbackState = playbackState
-    )
+    val shouldResumePlayback = hasTransientResumeIntent ||
+        shouldKickPlaybackOnForegroundResume(
+            playWhenReady = playWhenReady,
+            isPlaying = isPlaying,
+            playbackState = playbackState,
+            shouldEnsureAudibleOnForeground = shouldEnsureAudibleOnForeground
+        ) ||
+        shouldResumeAfterLifecyclePause(
+            wasPlaybackActive = wasPlaybackActive,
+            isPlaying = isPlaying,
+            playWhenReady = playWhenReady,
+            playbackState = playbackState
+        )
     return PlaybackResumeDecision(
         shouldResumePlayback = shouldResumePlayback,
         shouldRestoreVolume = shouldRestorePlayerVolumeOnResume(
@@ -74,4 +85,16 @@ internal fun resolvePlaybackResumeDecision(
             shouldEnsureAudible = shouldEnsureAudibleOnForeground
         )
     )
+}
+
+internal fun shouldKickPlaybackOnForegroundResume(
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    playbackState: Int,
+    shouldEnsureAudibleOnForeground: Boolean
+): Boolean {
+    return shouldEnsureAudibleOnForeground &&
+        playWhenReady &&
+        !isPlaying &&
+        playbackState == Player.STATE_BUFFERING
 }

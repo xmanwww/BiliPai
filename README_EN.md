@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-03 · Synced to v7.3.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-13 · Synced to v7.7.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.3.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.7.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -100,7 +100,7 @@
   - schedule + usage reminders + snooze
   - improved humane reminder copy and pacing strategy
 - `Quality Switching`:
-  - switchable quality list now prioritizes real DASH tracks
+  - quality options now follow the API list, while real DASH tracks decide which tiers stay switchable
   - cache switching requires exact target quality match; falls back to API when missing
   - clearer fallback toast when requested quality is unavailable
 
@@ -388,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-03 (v7.3.3). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-13 (v7.7.2). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -430,15 +430,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.3.3 · 2026-04-02)
+### Latest (v7.7.2 · 2026-04-13)
 
-- 🔒 **Privacy defaults tightened further**: crash tracking stays enabled by default, usage analytics is disabled by default, and player diagnostic logging remains available for black-screen, stutter, and quality-switch troubleshooting.
-- 🪵 **Ordinary runtime logs no longer persist by default**: warnings and errors can still feed crash snapshots and manual exports, but everyday runtime logs are no longer written to `runtime.log` automatically.
-- 🕵️ **Analytics and Crashlytics are further redacted**: no more uploading video IDs, live room IDs, season IDs, target user IDs, titles, or uploader names; Crashlytics also no longer binds `mid` or stores live-room titles and anchor names.
-- 🎬 **Quality switching and playback history are more stable**: premium quality switching now shows a cooldown hint instead of walking into a dead end, and playback heartbeat reports more accurate session start time, real watch time, and final progress.
-- 🎚️ **Seek and playback-button feedback feel more natural**: scrubbing now preserves the user intent captured at interaction start, and the center play button keeps a more reasonable playing state while playback is resuming through buffering.
-- 💬 **Comment badges and long-press menus are refined**: comment level badges now use more PiliPlus-like pixel assets including a dedicated senior level-6 badge, and video-card long-press menus appear closer to the actual press location.
-- 📥 **Range-download validation is stricter**: multi-thread downloads now verify `206 Partial Content` responses and matching ranges, then fall back to single-thread download when the server responds incorrectly.
+- 🔧 **Dynamic is being rewritten**: the feed is being split into All / Uploads / Bangumi / Articles / UP tabs with direct Bangumi routing, but this area still has defects and instability, and some dynamic types may behave incorrectly.
+- 🎲 **Portrait feed randomization**: vertical swipe recommendations now mix in home-feed candidates first and filter near-duplicate content instead of chaining similar related videos.
+- 💬 **Sub-replies without hiding video**: secondary comment threads in phone video detail now prefer the space below the player instead of always taking over the whole screen.
+- 📍 **Comment fallback**: comment reads now fall back to REST when gRPC payloads miss location metadata, reducing incomplete comment rendering.
 
 ---
 
@@ -468,7 +465,13 @@ Issues and Pull Requests are welcome!
 
 | Project | Description |
 |-----|-----|
+| [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) | Playback flow, comment presentation, and mobile UX reference |
 | [biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud) | Reference implementation for comment anti-fraud detection |
+| [BilibiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) | Sponsor skip segment data and API reference |
+| [Miuix](https://github.com/compose-miuix-ui/miuix) | Miuix-style Compose Multiplatform components |
+| [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Liquid glass visual effect reference |
+| [Haze](https://github.com/chrisbanes/haze) | Blur and frosted-glass effects |
+| [Compose Cupertino](https://github.com/alexzhirkevich/compose-cupertino) | Cupertino-style Compose UI components |
 
 ---
 

@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-03 · 文档已同步至 v7.3.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-13 · 文档已同步至 v7.7.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.3.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.7.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -111,7 +111,7 @@
   - 定时护眼 + 使用时长关怀提醒 + 稍后提醒
   - 关怀文案与提醒策略支持人性化优化
 - `画质切换`：
-  - 画质列表优先使用 DASH 实际可切换轨道
+  - 画质列表按接口返回展示，再用真实 DASH 轨道决定哪些档位可切换
   - 缓存切换改为目标画质精确匹配，缺失时回退 API
   - 切换提示文案更明确（目标不可用时清晰反馈）
 
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-03（v7.3.3）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-13（v7.7.2）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,15 +572,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.3.3 · 2026-04-02)
+### 最近更新 (v7.7.2 · 2026-04-13)
 
-- 🔒 **隐私默认策略继续收紧**：默认仅开启崩溃追踪，使用情况统计默认关闭；播放器诊断日志继续保留用于排查黑屏、卡顿和切换清晰度失败等问题。
-- 🪵 **普通运行日志不再默认落盘**：`W/E` 级别日志仍可用于崩溃快照和手动导出，但常规运行日志不再默认写入 `runtime.log`。
-- 🕵️ **Analytics / Crashlytics 进一步脱敏**：不再上传视频 ID、直播间 ID、番剧 ID、目标用户 ID、标题、UP 名等可识别观看内容字段；Crashlytics 也不再绑定 `mid` 或写入直播标题、主播名等敏感上下文。
-- 🎬 **清晰度切换和播放记录更稳**：高阶付费画质在接口冷却期会直接提示等待时间，避免死路切换；播放心跳会更准确记录会话开始时间、真实观看时长和收尾进度。
-- 🎚️ **Seek 与播放按钮反馈更自然**：进度条拖动会记住用户开始拖动时的播放意图，中央播放按钮在“正在恢复但仍缓冲”阶段也会保持更合理的播放态反馈。
-- 💬 **评论区等级徽章与卡片长按体验更新**：评论等级徽章改为更接近 PiliPlus 风格的像素资源图，并补上 `6级高能会员` 专属样式；视频卡片长按菜单也会更贴近真实按下位置展开。
-- 📥 **多线程下载校验更严格**：分段下载会校验 `206 Partial Content` 与范围头是否匹配，请求异常时自动回退到单线程，减少合并损坏文件的概率。
+- 🔧 **动态页重写中**：动态页开始拆成“全部 / 投稿 / 番剧 / 专栏 / UP”多分栏，并补上番剧跳转；但这一部分仍有功能缺陷和不稳定情况，部分动态类型的展示、筛选和交互可能异常。
+- 🎲 **竖屏推荐随机化**：竖屏连滑不再只盯着相关推荐，而是优先混入首页推荐并做近重复内容过滤，减少同类视频连着刷到。
+- 💬 **二级评论边看边刷**：手机视频详情里的楼中楼评论改成优先占据播放器下方区域，不再默认整页全屏盖住视频。
+- 📍 **评论读取补强**：当 gRPC 评论返回缺少位置信息时会自动回退 REST，降低评论信息不完整的问题。
 
 ### 历史版本
 
@@ -631,9 +628,12 @@ cd BiliPai
 | [DanmakuFlameMaster](https://github.com/bilibili/DanmakuFlameMaster) | B 站弹幕引擎 |
 | [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine) | 字节跳动高性能弹幕引擎 |
 | [bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) | B 站 API 文档 |
+| [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) | 播放链路、评论样式和移动端体验参考 |
 | [biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud) | 评论反诈检测参考实现 |
+| [BilibiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) | 空降助手片段数据与 API 参考 |
+| [Miuix](https://github.com/compose-miuix-ui/miuix) | Compose Multiplatform 的 Miuix 风格组件 |
 | [Haze](https://github.com/chrisbanes/haze) | 毛玻璃效果库 |
-| [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) | 液态玻璃效果 |
+| [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | 液态玻璃效果 |
 | [Lottie](https://github.com/airbnb/lottie-android) | Airbnb 动画库 |
 | [Coil](https://github.com/coil-kt/coil) | Kotlin 图片加载库 |
 | [Compose Shimmer](https://github.com/valentinilk/compose-shimmer) | 骨架屏加载效果 |

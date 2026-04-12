@@ -149,6 +149,7 @@ sealed class PlayerUiState {
         val adaptiveDashSource: AdaptiveDashPlaybackSource? = null,
         val qualityLabels: List<String> = emptyList(),
         val qualityIds: List<Int> = emptyList(),
+        val switchableQualityIds: List<Int> = emptyList(),
         val startPosition: Long = 0L,
         val pendingPlaybackTransitionPositionMs: Long? = null,
         val cachedDashVideos: List<DashVideo> = emptyList(),
@@ -2040,12 +2041,23 @@ class PlayerViewModel : ViewModel() {
             }
             _uiState.value = PlayerUiState.Loading.Initial
             
-                val defaultQuality = appContext?.let {
-                    NetworkUtils.getPlayableDefaultQualityId(
-                        context = it,
-                        isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty() ||
-                            !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty(),
-                        isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
+                val isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty() ||
+                    !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty()
+                val defaultQuality = appContext?.let { context ->
+                    val storedQuality = NetworkUtils.getDefaultQualityId(context)
+                    val autoHighestEnabled = com.android.purebilibili.core.store.SettingsManager
+                        .getAutoHighestQualitySync(context)
+                    val effectiveVip = VideoRepository.refreshVipStatusForPreferredQualityIfNeeded(
+                        isLoggedIn = isLoggedIn,
+                        cachedIsVip = com.android.purebilibili.core.store.TokenManager.isVipCache,
+                        storedQuality = storedQuality,
+                        autoHighestEnabled = autoHighestEnabled
+                    )
+                    com.android.purebilibili.core.util.resolvePlaybackDefaultQualityId(
+                        storedQuality = storedQuality,
+                        autoHighestEnabled = autoHighestEnabled,
+                        isLoggedIn = isLoggedIn,
+                        isVip = effectiveVip
                     )
                 } ?: 64
                 //  [新增] 获取音频/视频偏好
@@ -2208,6 +2220,7 @@ class PlayerViewModel : ViewModel() {
                             adaptiveDashSource = result.adaptiveDashSource,
                             qualityIds = result.qualityIds,
                             qualityLabels = result.qualityLabels,
+                            switchableQualityIds = result.switchableQualityIds,
                             cachedDashVideos = result.cachedDashVideos,
                             cachedDashAudios = result.cachedDashAudios,
                             emoteMap = result.emoteMap,
@@ -2454,12 +2467,25 @@ class PlayerViewModel : ViewModel() {
                     }
                     
                     // 获取默认画质
-                    val defaultQuality = appContext?.let {
-                        com.android.purebilibili.core.util.NetworkUtils.getPlayableDefaultQualityId(
-                            context = it,
-                            isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty() ||
-                                !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty(),
-                            isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
+                    val isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty() ||
+                        !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty()
+                    val defaultQuality = appContext?.let { context ->
+                        val storedQuality = com.android.purebilibili.core.util.NetworkUtils
+                            .getDefaultQualityId(context)
+                        val autoHighestEnabled = com.android.purebilibili.core.store.SettingsManager
+                            .getAutoHighestQualitySync(context)
+                        val effectiveVip = com.android.purebilibili.data.repository.VideoRepository
+                            .refreshVipStatusForPreferredQualityIfNeeded(
+                                isLoggedIn = isLoggedIn,
+                                cachedIsVip = com.android.purebilibili.core.store.TokenManager.isVipCache,
+                                storedQuality = storedQuality,
+                                autoHighestEnabled = autoHighestEnabled
+                            )
+                        com.android.purebilibili.core.util.resolvePlaybackDefaultQualityId(
+                            storedQuality = storedQuality,
+                            autoHighestEnabled = autoHighestEnabled,
+                            isLoggedIn = isLoggedIn,
+                            isVip = effectiveVip
                         )
                     } ?: 64
                     
@@ -2935,7 +2961,7 @@ class PlayerViewModel : ViewModel() {
         val visible: Boolean = false,
         val text: String = "",
         val dmid: Long = 0,
-        val uid: Long = 0, // 发送者 UID (如果可用)
+        val userHash: String = "", // 发送者标识 (可能不是纯数字 UID)
         val isSelf: Boolean = false, // 是否是自己发送的
         val voteCount: Int = 0,
         val hasLiked: Boolean = false,
@@ -2946,13 +2972,13 @@ class PlayerViewModel : ViewModel() {
     private val _danmakuMenuState = MutableStateFlow(DanmakuMenuState())
     val danmakuMenuState = _danmakuMenuState.asStateFlow()
     
-    fun showDanmakuMenu(dmid: Long, text: String, uid: Long = 0, isSelf: Boolean = false) {
+    fun showDanmakuMenu(dmid: Long, text: String, userHash: String = "", isSelf: Boolean = false) {
         val supportsVote = dmid > 0L && currentCid > 0L
         _danmakuMenuState.value = DanmakuMenuState(
             visible = true,
             text = text,
             dmid = dmid,
-            uid = uid,
+            userHash = userHash,
             isSelf = isSelf,
             voteLoading = supportsVote,
             canVote = supportsVote
@@ -3124,7 +3150,11 @@ class PlayerViewModel : ViewModel() {
      * 发送评论
      * @param inputMessage 可选直接传入的内容，如果不传则使用 state 中的内容
      */
-    fun sendComment(inputMessage: String? = null, imageUris: List<Uri> = emptyList()) {
+    fun sendComment(
+        inputMessage: String? = null,
+        imageUris: List<Uri> = emptyList(),
+        syncToDynamic: Boolean = false
+    ) {
         if (inputMessage != null) {
             _commentInput.value = inputMessage
         }
@@ -3162,7 +3192,8 @@ class PlayerViewModel : ViewModel() {
                     message = message,
                     root = root,
                     parent = parent,
-                    pictures = pictures
+                    pictures = pictures,
+                    syncToDynamic = syncToDynamic
                 )
                 .onSuccess { reply ->
                     toast(if (replyTo != null) "回复成功" else "评论成功")
@@ -3518,7 +3549,8 @@ class PlayerViewModel : ViewModel() {
             qualityDesc = "音频",
             videoUrl = "",
             audioUrl = audioUrl,
-            isAudioOnly = true
+            isAudioOnly = true,
+            isVerticalVideo = false
         )
         
         val started = com.android.purebilibili.feature.download.DownloadManager.addTask(task)
@@ -4604,10 +4636,16 @@ class PlayerViewModel : ViewModel() {
     ): com.android.purebilibili.feature.download.DownloadTask? {
         val qualityDesc = resolveDownloadQualityDescription(current, qualityId)
         val isCurrentTarget = targetBvid == currentBvid && targetCid == currentCid
+        val candidate = com.android.purebilibili.feature.download.resolveBatchDownloadCandidate(
+            info = current.info,
+            targetBvid = targetBvid,
+            targetCid = targetCid
+        )
+        val effectiveLabel = candidate?.label?.takeIf { it.isNotBlank() } ?: targetLabel
         val resolvedTitle = resolveBatchDownloadTaskTitle(
             rootTitle = current.info.title,
             candidateTitle = targetTitle,
-            candidateLabel = targetLabel
+            candidateLabel = effectiveLabel
         )
 
         val currentDashVideo = current.cachedDashVideos.find { it.id == qualityId }
@@ -4646,14 +4684,20 @@ class PlayerViewModel : ViewModel() {
             bvid = targetBvid,
             cid = targetCid,
             title = resolvedTitle,
+            episodeLabel = effectiveLabel.takeIf { it.isNotBlank() && it != resolvedTitle },
+            groupKey = candidate?.groupKey,
+            groupTitle = candidate?.groupTitle,
+            episodeSortIndex = candidate?.episodeSortIndex ?: 0,
+            episodeCount = candidate?.episodeCount ?: 1,
             cover = targetCover.ifBlank { current.info.pic },
             ownerName = current.info.owner.name,
             ownerFace = current.info.owner.face,
-            duration = 0,
+            duration = candidate?.durationSeconds ?: 0,
             quality = qualityId,
             qualityDesc = qualityDesc,
             videoUrl = resolvedUrls.first,
-            audioUrl = resolvedUrls.second
+            audioUrl = resolvedUrls.second,
+            isVerticalVideo = candidate?.isVerticalVideo ?: (current.info.dimension?.isVertical == true)
         )
     }
     
@@ -4704,7 +4748,7 @@ class PlayerViewModel : ViewModel() {
             var failedCount = 0
 
             candidates.filter { it.selected }.forEach { candidate ->
-                val existingTask = com.android.purebilibili.feature.download.DownloadManager.getTask(
+                val existingTask = com.android.purebilibili.feature.download.DownloadManager.getVideoTask(
                     candidate.bvid,
                     candidate.cid
                 )
@@ -4932,6 +4976,7 @@ class PlayerViewModel : ViewModel() {
                         pendingPlaybackTransitionPositionMs = transitionPositionMs,
                         qualityIds = result.qualityIds.ifEmpty { current.qualityIds },
                         qualityLabels = result.qualityLabels.ifEmpty { current.qualityLabels },
+                        switchableQualityIds = result.switchableQualityIds.ifEmpty { current.switchableQualityIds },
                         //  [修复] 更新缓存的DASH流，否则后续画质切换可能失败
                         cachedDashVideos = result.cachedDashVideos.ifEmpty { current.cachedDashVideos },
                         cachedDashAudios = result.cachedDashAudios.ifEmpty { current.cachedDashAudios }
@@ -5054,6 +5099,7 @@ class PlayerViewModel : ViewModel() {
                             adaptiveDashSource = selection.adaptiveDashSource,
                             qualityIds = selection.qualityIds,
                             qualityLabels = selection.qualityLabels,
+                            switchableQualityIds = selection.switchableQualityIds,
                             cachedDashVideos = selection.cachedDashVideos,
                             cachedDashAudios = selection.cachedDashAudios
                         )
@@ -5227,6 +5273,7 @@ class PlayerViewModel : ViewModel() {
                 videoDurationMs = playUrlData.timelength.coerceAtLeast(0L),
                 qualityIds = selection.qualityIds,
                 qualityLabels = selection.qualityLabels,
+                switchableQualityIds = selection.switchableQualityIds,
                 cachedDashVideos = selection.cachedDashVideos,
                 cachedDashAudios = selection.cachedDashAudios
             )

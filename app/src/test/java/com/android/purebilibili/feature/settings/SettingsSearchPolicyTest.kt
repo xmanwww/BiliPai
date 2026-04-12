@@ -56,6 +56,13 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun queryByUpBadgeKeyword_hitsAppearanceEntry() {
+        val results = resolveSettingsSearchResults("UP主标识")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
     fun queryByMd3Alias_hitsAppearanceEntry() {
         val results = resolveSettingsSearchResults("md3")
 
@@ -67,5 +74,33 @@ class SettingsSearchPolicyTest {
         val results = resolveSettingsSearchResults("waiguan")
 
         assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
+    fun queryByPredictiveBack_hitsAppearanceEntry() {
+        val results = resolveSettingsSearchResults("预测性返回")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
+    fun queryByPictureInPicture_hitsPlaybackEntry() {
+        val results = resolveSettingsSearchResults("画中画")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.PLAYBACK })
+    }
+
+    @Test
+    fun queryByAutoRotate_hitsPlaybackEntry() {
+        val results = resolveSettingsSearchResults("自动横竖屏")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.PLAYBACK })
+    }
+
+    @Test
+    fun queryByAutoCheckUpdate_hitsCheckUpdateEntry() {
+        val results = resolveSettingsSearchResults("自动检查更新")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.CHECK_UPDATE })
     }
 }
